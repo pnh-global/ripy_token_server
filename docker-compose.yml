@@ -1,0 +1,70 @@
+version: "3.9"
+
+services:
+  app:
+    container_name: ripy-app
+    build: ./app
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DB_HOST=ripy-db
+      - DB_USER=ripy_user
+      - DB_PASSWORD=monivon0070
+      - DB_NAME=ripy_token
+    expose:
+      - "4000"
+    depends_on:
+      - mariadb
+    networks: [ripy-net]
+
+  app_dev:
+    container_name: ripy-app-dev
+    build: ./app
+    environment:
+      - NODE_ENV=development
+      - PORT=4001
+      - DB_HOST=ripy-db
+      - DB_USER=ripy_user
+      - DB_PASSWORD=monivon0070
+      - DB_NAME=ripy_token
+    command: ["node","server.js"]
+    expose:
+      - "4001"
+    depends_on:
+      - mariadb
+    networks: [ripy-net]
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: ripy-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpass
+      - MYSQL_DATABASE=ripy_token
+      - MYSQL_USER=ripy_user
+      - MYSQL_PASSWORD=monivon0070
+    volumes:
+      - ./db:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    expose:
+      - "3306"
+    networks: [ripy-net]
+
+  nginx:
+    image: nginx:1.25
+    container_name: ripy-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
+      - /var/log/nginx:/var/log/nginx
+    depends_on:
+      - app
+      - app_dev
+    networks: [ripy-net]
+
+networks:
+  ripy-net:
+    driver: bridge
+
