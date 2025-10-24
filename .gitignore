@@ -1,0 +1,12 @@
+node_modules/
+app/node_modules
+dist/
+build/
+.cache/
+*.log
+.env
+.vscode/
+.idea/
+*.suo
+*.user
+*.classpath
