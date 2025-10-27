@@ -39,8 +39,11 @@ const blindModel = {
             };
 
         } catch (error) {
-            console.error('Error in addBlindIp:', error);
-            console.error('Parameters:', data);
+            // 개발 환경에서만 로그 출력
+            if (process.env.NODE_ENV !== 'test') {
+                console.error('Error in addBlindIp:', error);
+                console.error('Parameters:', data);
+            }
             throw error;
         }
     },
@@ -76,7 +79,10 @@ const blindModel = {
             return rows.length > 0;
 
         } catch (error) {
-            console.error('Error in checkBlindIp:', error);
+            // 개발 환경에서만 로그 출력
+            if (process.env.NODE_ENV !== 'test') {
+                console.error('Error in checkBlindIp:', error);
+            }
             throw error;
         }
     },

@@ -1,124 +1,94 @@
-/**
- * ============================================
- * db.util.js - 데이터베이스 유틸리티
- * ============================================
- *
- * 역할:
- * - Named Parameters(:name) 방식 쿼리 지원
- * - 자동 커넥션 관리
- * - 에러 핸들링
- *
- * 왜 필요한가?
- * - mysql2는 기본적으로 ? 방식만 지원
- * - Named Parameters가 가독성과 유지보수에 유리
- * - SQL Injection 방지
- *
- * 사용 예시:
- * const [rows] = await exec(
- *   'SELECT * FROM users WHERE id = :id AND name = :name',
- *   { id: 1, name: 'John' }
- * );
- */
-
 import { pool } from '../config/db.js';
 
 /**
- * Named Parameters를 지원하는 쿼리 실행 함수
+ * DB 연결 풀에서 연결 객체를 가져오는 함수
+ * @returns {Promise<Connection>} MySQL 연결 객체
+ * @throws {Error} 연결 실패 시 에러 발생
  *
- * @param {string} sql - SQL 쿼리 (Named Parameters 사용)
- * @param {Object} params - 파라미터 객체
- * @returns {Promise<Array>} - [rows, fields] (mysql2 표준 형식)
+ * @example
+ * const connection = await getConnection();
+ * try {
+ *   const [rows] = await connection.query('SELECT * FROM users');
+ *   return rows;
+ * } finally {
+ *   connection.release(); // 반드시 연결 해제
+ * }
  */
-export async function exec(sql, params = {}) {
-    const connection = await pool.getConnection();
-
+export async function getConnection() {
     try {
-        const { query, values } = convertNamedParams(sql, params);
-        const result = await connection.execute(query, values);
-        return result;
-
+        const connection = await pool.getConnection();
+        return connection;
     } catch (error) {
-        console.error('[DB ERROR] 쿼리 실행 실패:');
-        console.error('  SQL:', sql);
-        console.error('  Params:', params);
-        console.error('  Error:', error.message);
-        throw error;
-
-    } finally {
-        connection.release();
+        console.error('[DB] Connection error:', error);
+        throw new Error('데이터베이스 연결을 가져오는데 실패했습니다.');
     }
 }
 
 /**
- * Named Parameters를 mysql2 형식(?)으로 변환
+ * 트랜잭션을 시작하고 연결 객체를 반환하는 함수
+ * @returns {Promise<Connection>} 트랜잭션이 시작된 MySQL 연결 객체
+ * @throws {Error} 트랜잭션 시작 실패 시 에러 발생
+ *
+ * @example
+ * const connection = await beginTransaction();
+ * try {
+ *   await connection.query('INSERT INTO users...');
+ *   await connection.query('INSERT INTO logs...');
+ *   await connection.commit(); // 커밋
+ * } catch (error) {
+ *   await connection.rollback(); // 롤백
+ *   throw error;
+ * } finally {
+ *   connection.release(); // 연결 해제
+ * }
  */
-function convertNamedParams(sql, params) {
-    if (!params || Object.keys(params).length === 0) {
-        return { query: sql, values: [] };
-    }
-
-    const values = [];
-    const query = sql.replace(/:(\w+)/g, (match, paramName) => {
-        if (paramName in params) {
-            values.push(params[paramName]);
-            return '?';
-        }
-        throw new Error(`Missing parameter: ${paramName}`);
-    });
-
-    return { query, values };
-}
-
-/**
- * 트랜잭션 실행 헬퍼 함수
- */
-export async function transaction(callback) {
-    const connection = await pool.getConnection();
-
+export async function beginTransaction() {
+    const connection = await getConnection();
     try {
         await connection.beginTransaction();
-        const result = await callback(connection);
-        await connection.commit();
-        return result;
-
+        return connection;
     } catch (error) {
-        await connection.rollback();
-        console.error('[TRANSACTION ERROR]', error.message);
-        throw error;
+        connection.release();
+        console.error('[DB] Transaction start error:', error);
+        throw new Error('트랜잭션 시작에 실패했습니다.');
+    }
+}
 
+/**
+ * 쿼리를 실행하고 결과를 반환하는 헬퍼 함수
+ * @param {string} query - 실행할 SQL 쿼리
+ * @param {Array} params - 쿼리 파라미터 배열
+ * @returns {Promise<Array>} 쿼리 결과 [rows, fields]
+ * @throws {Error} 쿼리 실행 실패 시 에러 발생
+ *
+ * @example
+ * const [rows] = await executeQuery('SELECT * FROM users WHERE id = ?', [userId]);
+ */
+export async function executeQuery(query, params = []) {
+    const connection = await getConnection();
+    try {
+        const result = await connection.query(query, params);
+        return result;
+    } catch (error) {
+        console.error('[DB] Query execution error:', error);
+        throw error;
     } finally {
         connection.release();
     }
 }
 
 /**
- * 단순 SELECT 조회 헬퍼
+ * DB 연결 풀의 상태를 확인하는 함수
+ * @returns {Promise<Object>} 연결 풀 상태 정보
+ *
+ * @example
+ * const poolStatus = await getPoolStatus();
+ * console.log('Active connections:', poolStatus.active);
  */
-export async function query(sql, params = {}) {
-    const [rows] = await exec(sql, params);
-    return rows;
-}
-
-/**
- * 단일 행 조회 헬퍼
- */
-export async function queryOne(sql, params = {}) {
-    const rows = await query(sql, params);
-    return rows[0] || null;
-}
-
-/**
- * INSERT 후 생성된 ID 반환
- */
-export async function insert(sql, params = {}) {
-    const [result] = await exec(sql, params);
-    return result.insertId;
-}
-
-/**
- * UPDATE/DELETE 후 영향받은 행 개수 반환
- */
-export async function update(sql, params = {}) {
-    const [result] = await exec(sql, params);
-    return result.affectedRows;
+export async function getPoolStatus() {
+    return {
+        active: pool._allConnections.length,
+        idle: pool._freeConnections.length,
+        waiting: pool._connectionQueue.length
+    };
 }
