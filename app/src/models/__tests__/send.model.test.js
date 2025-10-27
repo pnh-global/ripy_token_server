@@ -11,11 +11,14 @@
  * 5. 트랜잭션 처리
  * 6. 암호화/복호화
  * 7. 통계 및 재시도 로직
+ *
+ * 변경 이력:
+ * - 2025-01-27: tx_signature 관련 테스트 제거 (DB 스키마에 맞춤)
  */
 
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import { v4 as uuidv4 } from 'uuid';
-import { exec } from '../../lib/db.util.js';
+import { executeQuery } from '../../lib/db.util.js';
 import { decryptData } from '../../utils/crypto.js';
 import {
     // 상수
@@ -78,8 +81,8 @@ function generateTestRecipients(count = 10) {
  */
 async function cleanupTestData(request_id) {
     try {
-        await exec('DELETE FROM r_send_detail WHERE request_id = :id', { id: request_id });
-        await exec('DELETE FROM r_send_request WHERE request_id = :id', { id: request_id });
+        await executeQuery('DELETE FROM r_send_detail WHERE request_id = :id', { id: request_id });
+        await executeQuery('DELETE FROM r_send_request WHERE request_id = :id', { id: request_id });
     } catch (error) {
         console.error('테스트 데이터 정리 실패:', error.message);
     }
@@ -250,10 +253,10 @@ describe('send.model.js - 상세 테이블 기본 기능', () => {
 
         const pending = await listPendingDetails(testRequestId);
 
+        // tx_signature 파라미터 제거
         await updateDetailResult(pending[0].idx, {
             success: true,
-            result_code: '200',
-            tx_signature: 'test_signature'
+            result_code: '200'
         });
 
         const details = await getAllDetails(testRequestId);
@@ -261,7 +264,7 @@ describe('send.model.js - 상세 테이블 기본 기능', () => {
 
         expect(updated.sent).toBe(SENT_FLAG.YES);
         expect(updated.attempt_count).toBe(1);
-        expect(updated.tx_signature).toBe('test_signature');
+        expect(updated.last_result_code).toBe('200');
     });
 });
 
@@ -313,16 +316,15 @@ describe('send.model.js - 트랜잭션 기능', () => {
 
         const pending = await listPendingDetails(testRequestId);
 
+        // tx_signature 파라미터 제거
         await updateDetailResult(pending[0].idx, {
             success: true,
-            result_code: '200',
-            tx_signature: 'sig1'
+            result_code: '200'
         });
 
         await updateDetailResult(pending[1].idx, {
             success: true,
-            result_code: '200',
-            tx_signature: 'sig2'
+            result_code: '200'
         });
 
         const stats = await refreshMasterStats(testRequestId);
@@ -426,17 +428,38 @@ describe('send.model.js - 배치 처리', () => {
     test('배치로 여러 결과를 업데이트해야 함', async () => {
         const pending = await listPendingDetails(testRequestId);
 
+        // tx_signature 파라미터 제거
         const results = pending.slice(0, 5).map((detail, index) => ({
             idx: detail.idx,
             success: index % 2 === 0,
             result_code: index % 2 === 0 ? '200' : '500',
-            error_message: index % 2 === 0 ? null : `Error ${index}`,
-            tx_signature: index % 2 === 0 ? `sig_${index}` : null
+            error_message: index % 2 === 0 ? null : `Error ${index}`
         }));
 
         const updatedCount = await updateDetailResultsBatch(results);
 
         expect(updatedCount).toBe(5);
+
+        // 결과 확인
+        const details = await getAllDetails(testRequestId);
+        const updatedDetails = details.filter(d =>
+            results.some(r => r.idx === d.idx)
+        );
+
+        // 성공한 항목 확인 (index가 짝수인 경우)
+        const successDetails = updatedDetails.filter((_, i) => i % 2 === 0);
+        successDetails.forEach(detail => {
+            expect(detail.sent).toBe(SENT_FLAG.YES);
+            expect(detail.last_result_code).toBe('200');
+        });
+
+        // 실패한 항목 확인 (index가 홀수인 경우)
+        const failedDetails = updatedDetails.filter((_, i) => i % 2 !== 0);
+        failedDetails.forEach(detail => {
+            expect(detail.sent).toBe(SENT_FLAG.NO);
+            expect(detail.last_result_code).toBe('500');
+            expect(detail.last_error_message).toContain('Error');
+        });
     });
 });
 

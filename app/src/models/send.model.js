@@ -15,9 +15,10 @@
  *
  * 변경 이력:
  * - 2025-01-XX: 에러 처리 개선, 트랜잭션 추가, 상수 분리
+ * - 2025-01-27: tx_signature 컬럼 제거 (DB 스키마에 맞춤)
  */
 
-import { exec, getConnection } from '../lib/db.util.js';
+import { getConnection, executeQuery } from '../lib/db.util.js';
 import { encryptData, decryptData } from '../utils/crypto.js';
 
 // ============================================
@@ -202,22 +203,22 @@ export async function createSendRequest({ request_id, cate1, cate2, total_count 
         }
 
         const sql = `
-      INSERT INTO r_send_request (
-        request_id, 
-        cate1, 
-        cate2, 
-        total_count, 
-        status
-      ) VALUES (
-        :request_id, 
-        :cate1, 
-        :cate2, 
-        :total_count, 
-        :status
-      )
-    `;
+            INSERT INTO r_send_request (
+                request_id,
+                cate1,
+                cate2,
+                total_count,
+                status
+            ) VALUES (
+                         :request_id,
+                         :cate1,
+                         :cate2,
+                         :total_count,
+                         :status
+                     )
+        `;
 
-        await exec(sql, {
+        await executeQuery(sql, {
             request_id,
             cate1,
             cate2: cate2 || null,  // cate2는 선택적
@@ -268,13 +269,13 @@ export async function setMasterStatus(request_id, status) {
         validateStatus(status);
 
         const sql = `
-      UPDATE r_send_request 
-      SET status = :status, 
-          updated_at = CURRENT_TIMESTAMP
-      WHERE request_id = :id
-    `;
+            UPDATE r_send_request
+            SET status = :status,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE request_id = :id
+        `;
 
-        const [result] = await exec(sql, { status, id: request_id });
+        const [result] = await executeQuery(sql, { status, id: request_id });
 
         // 업데이트된 행이 없는 경우
         if (result.affectedRows === 0) {
@@ -299,8 +300,9 @@ export async function setMasterStatus(request_id, status) {
         );
     }
 }
+
 /**
- * 마스터 정보 조회
+ * 마스터 요청 정보 조회
  *
  * @param {string} request_id - 요청 UUID
  * @returns {Promise<Object|null>} - 요청 정보 또는 null
@@ -312,33 +314,33 @@ export async function getRequestStatus(request_id) {
         validateRequestId(request_id);
 
         const sql = `
-      SELECT 
-        idx,
-        request_id,
-        cate1,
-        cate2,
-        total_count,
-        completed_count,
-        failed_count,
-        status,
-        created_at,
-        updated_at
-      FROM r_send_request 
-      WHERE request_id = :id
-    `;
+            SELECT
+                idx,
+                request_id,
+                cate1,
+                cate2,
+                total_count,
+                completed_count,
+                failed_count,
+                status,
+                created_at,
+                updated_at
+            FROM r_send_request
+            WHERE request_id = :id
+        `;
 
-        const [rows] = await exec(sql, { id: request_id });
+        const [rows] = await executeQuery(sql, { id: request_id });
 
-        return rows[0] || null;
+        return rows.length > 0 ? rows[0] : null;
 
     } catch (error) {
         if (error instanceof SendModelError) {
             throw error;
         }
 
-        console.error('[SEND MODEL ERROR] 요청 정보 조회 실패:', error.message);
+        console.error('[SEND MODEL ERROR] 요청 상태 조회 실패:', error.message);
         throw new SendModelError(
-            '요청 정보 조회 중 데이터베이스 오류가 발생했습니다.',
+            '요청 상태 조회 중 데이터베이스 오류가 발생했습니다.',
             'DB_ERROR',
             error
         );
@@ -346,82 +348,62 @@ export async function getRequestStatus(request_id) {
 }
 
 /**
- * 마스터 통계 자동 갱신
+ * 마스터 통계 갱신
  *
  * @param {string} request_id - 요청 UUID
  * @returns {Promise<Object>} - 갱신된 통계 { total, completed, failed }
  * @throws {SendModelError} 갱신 실패 시
  *
- * 동작 방식:
- * - r_send_detail의 실제 결과를 집계해서 마스터에 반영
- * - completed_count, failed_count 정확성 보장
- * - 트랜잭션 내에서 처리하여 일관성 유지
+ * 동작:
+ * 1. r_send_detail에서 실제 통계를 집계
+ * 2. r_send_request의 completed_count, failed_count 업데이트
  */
 export async function refreshMasterStats(request_id) {
-    let connection = null;
-
     try {
         // 입력값 검증
         validateRequestId(request_id);
 
-        // 트랜잭션 시작
-        connection = await getConnection();
-        await connection.beginTransaction();
+        // 1. 실제 통계 집계
+        const statsSql = `
+      SELECT 
+        COUNT(*) AS total,
+        SUM(CASE WHEN sent = 'Y' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN sent = 'N' AND attempt_count >= :max_retry THEN 1 ELSE 0 END) AS failed
+      FROM r_send_detail
+      WHERE request_id = :request_id
+    `;
 
-        // 1. 총 개수 조회
-        const [totalRows] = await connection.execute(
-            `SELECT COUNT(*) AS total 
-       FROM r_send_detail 
-       WHERE request_id = ?`,
-            [request_id]
-        );
+        const [statsRows] = await executeQuery(statsSql, {
+            request_id,
+            max_retry: MAX_RETRY_COUNT
+        });
 
-        // 2. 성공/실패 개수 조회
-        const [statsRows] = await connection.execute(
-            `SELECT 
-         SUM(CASE WHEN sent = 'Y' THEN 1 ELSE 0 END) AS ok,
-         SUM(CASE WHEN sent = 'N' THEN 1 ELSE 0 END) AS no
-       FROM r_send_detail 
-       WHERE request_id = ?`,
-            [request_id]
-        );
+        const stats = statsRows[0];
+        const total = stats.total || 0;
+        const completed = stats.completed || 0;
+        const failed = stats.failed || 0;
 
-        const total = totalRows[0]?.total || 0;
-        const completed = statsRows[0]?.ok || 0;
-        const failed = statsRows[0]?.no || 0;
+        // 2. 마스터 테이블 업데이트
+        const updateSql = `
+      UPDATE r_send_request
+      SET 
+        completed_count = :completed,
+        failed_count = :failed,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE request_id = :request_id
+    `;
 
-        // 3. 마스터 업데이트
-        const [result] = await connection.execute(
-            `UPDATE r_send_request 
-       SET total_count = ?,
-           completed_count = ?,
-           failed_count = ?,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE request_id = ?`,
-            [total, completed, failed, request_id]
-        );
+        await executeQuery(updateSql, {
+            request_id,
+            completed,
+            failed
+        });
 
-        // 업데이트된 행이 없는 경우
-        if (result.affectedRows === 0) {
-            throw new SendModelError(
-                `request_id를 찾을 수 없습니다: ${request_id}`,
-                'NOT_FOUND'
-            );
-        }
-
-        // 트랜잭션 커밋
-        await connection.commit();
-
-        console.log('[SEND MODEL] 통계 갱신 완료 - 총:', total, '완료:', completed, '실패:', failed);
+        console.log(`[SEND MODEL] 통계 갱신: 완료=${completed}, 실패=${failed}, 전체=${total}`);
 
         return { total, completed, failed };
 
     } catch (error) {
-        // 트랜잭션 롤백
-        if (connection) {
-            await connection.rollback();
-        }
-
         if (error instanceof SendModelError) {
             throw error;
         }
@@ -432,11 +414,6 @@ export async function refreshMasterStats(request_id) {
             'DB_ERROR',
             error
         );
-    } finally {
-        // 연결 반환
-        if (connection) {
-            connection.release();
-        }
     }
 }
 
@@ -445,266 +422,176 @@ export async function refreshMasterStats(request_id) {
 // ============================================
 
 /**
- * 개별 수신자 상세 정보 일괄 생성 (Bulk Insert with Transaction)
+ * 상세 정보 일괄 생성
  *
  * @param {string} request_id - 요청 UUID
- * @param {Array<Object>} rows - 수신자 배열
- * @param {string} rows[].wallet_address - 지갑 주소 (평문)
- * @param {number} rows[].amount - RIPY 수량
- * @returns {Promise<number>} - 삽입된 행 수
+ * @param {Array<Object>} recipients - 수신자 배열
+ * @param {string} recipients[].wallet_address - 지갑 주소
+ * @param {number} recipients[].amount - 금액
+ * @returns {Promise<number>} - 생성된 행 수
  * @throws {SendModelError} 생성 실패 시
  *
- * 보안:
- * - 지갑 주소는 자동으로 암호화되어 저장됨
- *
- * 성능:
- * - BULK_INSERT_LIMIT(1000)개씩 나누어 처리
- * - 트랜잭션으로 일관성 보장
+ * 주의사항:
+ * - 지갑 주소는 자동으로 암호화됩니다.
+ * - BULK_INSERT_LIMIT을 초과하면 여러 번 나눠서 삽입합니다.
  */
-export async function insertSendDetails(request_id, rows) {
-    let connection = null;
-
+export async function insertSendDetails(request_id, recipients) {
     try {
         // 입력값 검증
         validateRequestId(request_id);
 
-        if (!Array.isArray(rows) || rows.length === 0) {
+        if (!Array.isArray(recipients) || recipients.length === 0) {
             throw new SendModelError(
-                '수신자 배열은 비어있을 수 없습니다.',
+                'recipients는 비어있지 않은 배열이어야 합니다.',
                 'VALIDATION_ERROR'
             );
         }
 
-        // 각 수신자 데이터 검증
-        rows.forEach((row, index) => {
+        // 각 수신자 검증 및 암호화
+        const validatedRecipients = recipients.map((recipient, index) => {
             try {
-                validateWalletAddress(row.wallet_address);
-                validateAmount(row.amount);
+                validateWalletAddress(recipient.wallet_address);
+                validateAmount(recipient.amount);
+
+                return {
+                    wallet_address: encryptData(recipient.wallet_address),
+                    amount: recipient.amount
+                };
             } catch (error) {
                 throw new SendModelError(
-                    `수신자 [${index}] 데이터 오류: ${error.message}`,
+                    `수신자 #${index + 1} 검증 실패: ${error.message}`,
                     'VALIDATION_ERROR',
                     error
                 );
             }
         });
 
-        // 트랜잭션 시작
-        connection = await getConnection();
-        await connection.beginTransaction();
-
         let totalInserted = 0;
 
-        // BULK_INSERT_LIMIT 단위로 나누어 처리
-        for (let i = 0; i < rows.length; i += BULK_INSERT_LIMIT) {
-            const chunk = rows.slice(i, i + BULK_INSERT_LIMIT);
+        // Bulk Insert 실행 (BULK_INSERT_LIMIT 단위로 분할)
+        for (let i = 0; i < validatedRecipients.length; i += BULK_INSERT_LIMIT) {
+            const chunk = validatedRecipients.slice(i, i + BULK_INSERT_LIMIT);
 
-            // VALUES 절 동적 생성
-            const placeholders = chunk.map(() => '(?, ?, ?)').join(', ');
+            // VALUES 절 생성
+            const valuePlaceholders = chunk.map((_, idx) => {
+                const offset = i + idx;
+                return `(:request_id, :wallet_${offset}, :amount_${offset})`;
+            }).join(', ');
 
-            // 파라미터 배열 생성 (암호화 포함)
-            const params = [];
-            for (const row of chunk) {
-                params.push(
-                    request_id,
-                    encryptData(row.wallet_address),  // 암호화
-                    row.amount
-                );
-            }
+            // 파라미터 객체 생성
+            const params = { request_id };
+            chunk.forEach((recipient, idx) => {
+                const offset = i + idx;
+                params[`wallet_${offset}`] = recipient.wallet_address;
+                params[`amount_${offset}`] = recipient.amount;
+            });
 
-            // SQL 실행
             const sql = `
         INSERT INTO r_send_detail (
           request_id, 
           wallet_address, 
           amount
-        ) VALUES ${placeholders}
+        ) VALUES ${valuePlaceholders}
       `;
 
-            const [result] = await connection.execute(sql, params);
+            const [result] = await executeQuery(sql, params);
             totalInserted += result.affectedRows;
-
-            console.log(`[SEND MODEL] ${chunk.length}개 수신자 정보 생성 (암호화됨) [${i + 1}-${i + chunk.length}/${rows.length}]`);
         }
 
-        // 트랜잭션 커밋
-        await connection.commit();
-
-        console.log(`[SEND MODEL] 총 ${totalInserted}개 수신자 정보 생성 완료`);
+        console.log(`[SEND MODEL] ${totalInserted}개 상세 정보 생성 완료`);
 
         return totalInserted;
 
     } catch (error) {
-        // 트랜잭션 롤백
-        if (connection) {
-            await connection.rollback();
-        }
-
         if (error instanceof SendModelError) {
             throw error;
         }
 
-        console.error('[SEND MODEL ERROR] 수신자 정보 생성 실패:', error.message);
+        console.error('[SEND MODEL ERROR] 상세 정보 생성 실패:', error.message);
         throw new SendModelError(
-            '수신자 정보 생성 중 데이터베이스 오류가 발생했습니다.',
+            '상세 정보 생성 중 데이터베이스 오류가 발생했습니다.',
             'DB_ERROR',
             error
         );
-    } finally {
-        // 연결 반환
-        if (connection) {
-            connection.release();
-        }
     }
 }
 
 /**
- * 마스터 요청 생성 + 상세 정보 일괄 생성 (원자적 트랜잭션)
+ * 마스터 + 상세 정보 원자적 생성 (트랜잭션)
  *
- * @param {Object} masterData - 마스터 요청 데이터
+ * @param {Object} masterData - 마스터 데이터
  * @param {string} masterData.request_id - UUID
  * @param {string} masterData.cate1 - 분류1
  * @param {string} masterData.cate2 - 분류2
- * @param {Array<Object>} details - 수신자 배열
+ * @param {Array<Object>} recipients - 수신자 배열
  * @returns {Promise<Object>} - { request_id, inserted_count }
  * @throws {SendModelError} 생성 실패 시
- *
- * 중요:
- * - 마스터와 상세가 모두 성공하거나 모두 실패
- * - 불일치 상태 방지
  */
-export async function createSendRequestWithDetails(masterData, details) {
-    let connection = null;
+export async function createSendRequestWithDetails(masterData, recipients) {
+    const connection = await getConnection();
 
     try {
-        // 입력값 검증
-        validateRequestId(masterData.request_id);
+        // 트랜잭션 시작
+        await connection.beginTransaction();
 
-        if (!Array.isArray(details) || details.length === 0) {
+        // 1. 마스터 생성
+        const { request_id, cate1, cate2 } = masterData;
+        validateRequestId(request_id);
+
+        if (!Array.isArray(recipients) || recipients.length === 0) {
             throw new SendModelError(
-                '수신자 배열은 비어있을 수 없습니다.',
+                'recipients는 비어있지 않은 배열이어야 합니다.',
                 'VALIDATION_ERROR'
             );
         }
 
-        // 트랜잭션 시작
-        connection = await getConnection();
-        await connection.beginTransaction();
+        await createSendRequest({
+            request_id,
+            cate1,
+            cate2,
+            total_count: recipients.length
+        });
 
-        // 1. 마스터 요청 생성
-        await connection.execute(
-            `INSERT INTO r_send_request (
-        request_id, 
-        cate1, 
-        cate2, 
-        total_count, 
-        status
-      ) VALUES (?, ?, ?, ?, ?)`,
-            [
-                masterData.request_id,
-                masterData.cate1,
-                masterData.cate2 || null,
-                details.length,
-                SEND_STATUS.PENDING
-            ]
-        );
-
-        console.log('[SEND MODEL] 마스터 요청 생성:', masterData.request_id);
-
-        // 2. 상세 정보 일괄 생성 (청크 처리)
-        let totalInserted = 0;
-
-        for (let i = 0; i < details.length; i += BULK_INSERT_LIMIT) {
-            const chunk = details.slice(i, i + BULK_INSERT_LIMIT);
-
-            // 각 청크 데이터 검증
-            chunk.forEach((row, index) => {
-                try {
-                    validateWalletAddress(row.wallet_address);
-                    validateAmount(row.amount);
-                } catch (error) {
-                    throw new SendModelError(
-                        `수신자 [${i + index}] 데이터 오류: ${error.message}`,
-                        'VALIDATION_ERROR',
-                        error
-                    );
-                }
-            });
-
-            const placeholders = chunk.map(() => '(?, ?, ?)').join(', ');
-            const params = [];
-
-            for (const row of chunk) {
-                params.push(
-                    masterData.request_id,
-                    encryptData(row.wallet_address),
-                    row.amount
-                );
-            }
-
-            const sql = `
-        INSERT INTO r_send_detail (
-          request_id, 
-          wallet_address, 
-          amount
-        ) VALUES ${placeholders}
-      `;
-
-            const [result] = await connection.execute(sql, params);
-            totalInserted += result.affectedRows;
-
-            console.log(`[SEND MODEL] ${chunk.length}개 수신자 추가 [${i + 1}-${i + chunk.length}/${details.length}]`);
-        }
+        // 2. 상세 정보 생성
+        const insertedCount = await insertSendDetails(request_id, recipients);
 
         // 트랜잭션 커밋
         await connection.commit();
 
-        console.log(`[SEND MODEL] 전송 요청 생성 완료 - 총 ${totalInserted}명`);
+        console.log(`[SEND MODEL] 트랜잭션 성공: ${insertedCount}개 생성`);
 
         return {
-            request_id: masterData.request_id,
-            inserted_count: totalInserted
+            request_id,
+            inserted_count: insertedCount
         };
 
     } catch (error) {
-        // 트랜잭션 롤백
-        if (connection) {
-            await connection.rollback();
-            console.log('[SEND MODEL] 트랜잭션 롤백');
-        }
+        // 롤백
+        await connection.rollback();
+
+        console.error('[SEND MODEL ERROR] 트랜잭션 실패:', error.message);
 
         if (error instanceof SendModelError) {
             throw error;
         }
 
-        console.error('[SEND MODEL ERROR] 전송 요청 생성 실패:', error.message);
         throw new SendModelError(
-            '전송 요청 생성 중 데이터베이스 오류가 발생했습니다.',
+            '마스터 + 상세 정보 생성 중 오류가 발생했습니다.',
             'DB_ERROR',
             error
         );
     } finally {
-        // 연결 반환
-        if (connection) {
-            connection.release();
-        }
+        connection.release();
     }
 }
+
 /**
- * 전송 대상 조회 (미전송 & 재시도 가능)
+ * 미전송 항목 조회 (sent = 'N' AND attempt_count = 0)
  *
  * @param {string} request_id - 요청 UUID
  * @param {number} limit - 최대 조회 개수 (기본: 100)
- * @returns {Promise<Array<Object>>} - 수신자 배열 (지갑 주소 복호화됨)
+ * @returns {Promise<Array<Object>>} - 미전송 항목 배열 (복호화됨)
  * @throws {SendModelError} 조회 실패 시
- *
- * 반환 형식:
- * [{
- *   idx: number,
- *   wallet_address: string (복호화됨),
- *   amount: number,
- *   attempt_count: number
- * }]
  */
 export async function listPendingDetails(request_id, limit = 100) {
     try {
@@ -719,23 +606,23 @@ export async function listPendingDetails(request_id, limit = 100) {
         }
 
         const sql = `
-      SELECT 
-        idx, 
-        wallet_address, 
-        amount, 
-        attempt_count
-      FROM r_send_detail
-      WHERE request_id = :request_id 
-        AND sent = :sent_no
-        AND attempt_count < :max_retry
-      ORDER BY idx ASC
-      LIMIT :limit
-    `;
+            SELECT
+                idx,
+                wallet_address,
+                amount,
+                attempt_count,
+                created_at
+            FROM r_send_detail
+            WHERE request_id = :request_id
+              AND sent = :sent_no
+              AND attempt_count = 0
+            ORDER BY idx ASC
+                LIMIT :limit
+        `;
 
-        const [rows] = await exec(sql, {
+        const [rows] = await executeQuery(sql, {
             request_id,
             sent_no: SENT_FLAG.NO,
-            max_retry: MAX_RETRY_COUNT,
             limit
         });
 
@@ -756,7 +643,7 @@ export async function listPendingDetails(request_id, limit = 100) {
             }
         });
 
-        console.log(`[SEND MODEL] ${decryptedRows.length}개 전송 대상 조회 (복호화 완료)`);
+        console.log(`[SEND MODEL] ${decryptedRows.length}개 미전송 항목 조회`);
 
         return decryptedRows;
 
@@ -765,9 +652,9 @@ export async function listPendingDetails(request_id, limit = 100) {
             throw error;
         }
 
-        console.error('[SEND MODEL ERROR] 전송 대상 조회 실패:', error.message);
+        console.error('[SEND MODEL ERROR] 미전송 항목 조회 실패:', error.message);
         throw new SendModelError(
-            '전송 대상 조회 중 데이터베이스 오류가 발생했습니다.',
+            '미전송 항목 조회 중 데이터베이스 오류가 발생했습니다.',
             'DB_ERROR',
             error
         );
@@ -775,23 +662,24 @@ export async function listPendingDetails(request_id, limit = 100) {
 }
 
 /**
- * 개별 수신자 전송 결과 업데이트
+ * 전송 결과 업데이트 (단일 항목)
  *
  * @param {number} idx - r_send_detail.idx
- * @param {Object} result - 전송 결과
- * @param {boolean} result.success - 성공 여부
- * @param {string} [result.result_code] - 결과 코드 (예: '200', '500')
- * @param {string} [result.error_message] - 에러 메시지
- * @param {string} [result.tx_signature] - 트랜잭션 서명 (성공 시)
+ * @param {Object} result - 결과 정보
+ * @param {boolean} result.success - 전송 성공 여부
+ * @param {string} result.result_code - 결과 코드 (예: '200', '500')
+ * @param {string} [result.error_message] - 에러 메시지 (실패 시)
  * @returns {Promise<void>}
  * @throws {SendModelError} 업데이트 실패 시
  *
  * 동작:
- * - attempt_count 자동 증가
- * - 성공 시: sent = 'Y', tx_signature 저장
- * - 실패 시: sent = 'N' (재시도 가능)
+ * - success=true: sent='Y', attempt_count 증가
+ * - success=false: sent='N', attempt_count 증가, error_message 저장
+ *
+ * 주의: tx_signature는 DB에 저장되지 않습니다.
+ *       트랜잭션 서명 정보는 r_log 테이블에 별도로 기록하세요.
  */
-export async function updateDetailResult(idx, { success, result_code, error_message, tx_signature }) {
+export async function updateDetailResult(idx, { success, result_code, error_message = null }) {
     try {
         // 입력값 검증
         if (typeof idx !== 'number' || idx < 1) {
@@ -808,31 +696,31 @@ export async function updateDetailResult(idx, { success, result_code, error_mess
             );
         }
 
-        // 에러 메시지 길이 제한 (DB 컬럼 크기 고려)
-        const truncatedErrorMessage = error_message
-            ? error_message.substring(0, 500)
-            : null;
+        if (!result_code || typeof result_code !== 'string') {
+            throw new SendModelError(
+                'result_code는 필수 문자열입니다.',
+                'VALIDATION_ERROR'
+            );
+        }
 
         const sql = `
       UPDATE r_send_detail
-      SET attempt_count = attempt_count + 1,
-          sent = :sent,
-          last_result_code = :result_code,
-          last_error_message = :error_message,
-          tx_signature = :tx_signature,
-          updated_at = CURRENT_TIMESTAMP
+      SET 
+        sent = :sent,
+        attempt_count = attempt_count + 1,
+        last_result_code = :result_code,
+        last_error_message = :error_message,
+        updated_at = CURRENT_TIMESTAMP
       WHERE idx = :idx
     `;
 
-        const [result] = await exec(sql, {
+        const [result] = await executeQuery(sql, {
             idx,
             sent: success ? SENT_FLAG.YES : SENT_FLAG.NO,
-            result_code: result_code || null,
-            error_message: truncatedErrorMessage,
-            tx_signature: tx_signature || null
+            result_code,
+            error_message: error_message || null
         });
 
-        // 업데이트된 행이 없는 경우
         if (result.affectedRows === 0) {
             throw new SendModelError(
                 `idx를 찾을 수 없습니다: ${idx}`,
@@ -840,8 +728,7 @@ export async function updateDetailResult(idx, { success, result_code, error_mess
             );
         }
 
-        const status = success ? '✓ 성공' : '✗ 실패';
-        console.log(`[SEND MODEL] ${status} - idx: ${idx}${tx_signature ? `, tx: ${tx_signature.substring(0, 8)}...` : ''}`);
+        console.log(`[SEND MODEL] 결과 업데이트: idx=${idx}, success=${success}`);
 
     } catch (error) {
         if (error instanceof SendModelError) {
@@ -850,7 +737,7 @@ export async function updateDetailResult(idx, { success, result_code, error_mess
 
         console.error('[SEND MODEL ERROR] 결과 업데이트 실패:', error.message);
         throw new SendModelError(
-            '전송 결과 업데이트 중 데이터베이스 오류가 발생했습니다.',
+            '결과 업데이트 중 데이터베이스 오류가 발생했습니다.',
             'DB_ERROR',
             error
         );
@@ -858,116 +745,75 @@ export async function updateDetailResult(idx, { success, result_code, error_mess
 }
 
 /**
- * 배치 결과 업데이트 (트랜잭션)
+ * 전송 결과 배치 업데이트
  *
- * @param {Array<Object>} results - 업데이트할 결과 배열
+ * @param {Array<Object>} results - 결과 배열
  * @param {number} results[].idx - r_send_detail.idx
- * @param {boolean} results[].success - 성공 여부
- * @param {string} [results[].result_code] - 결과 코드
+ * @param {boolean} results[].success - 전송 성공 여부
+ * @param {string} results[].result_code - 결과 코드
  * @param {string} [results[].error_message] - 에러 메시지
- * @param {string} [results[].tx_signature] - 트랜잭션 서명
  * @returns {Promise<number>} - 업데이트된 행 수
  * @throws {SendModelError} 업데이트 실패 시
  *
- * 용도:
- * - 대량 전송 결과를 한 번에 업데이트
- * - 트랜잭션으로 일관성 보장
+ * 주의: tx_signature는 DB에 저장되지 않습니다.
  */
 export async function updateDetailResultsBatch(results) {
-    let connection = null;
-
     try {
         // 입력값 검증
         if (!Array.isArray(results) || results.length === 0) {
             throw new SendModelError(
-                '결과 배열은 비어있을 수 없습니다.',
+                'results는 비어있지 않은 배열이어야 합니다.',
                 'VALIDATION_ERROR'
             );
         }
 
-        // 각 결과 데이터 검증
-        results.forEach((result, index) => {
-            if (typeof result.idx !== 'number' || result.idx < 1) {
-                throw new SendModelError(
-                    `결과 [${index}] idx가 유효하지 않습니다.`,
-                    'VALIDATION_ERROR'
-                );
-            }
-            if (typeof result.success !== 'boolean') {
-                throw new SendModelError(
-                    `결과 [${index}] success가 boolean이 아닙니다.`,
-                    'VALIDATION_ERROR'
-                );
-            }
-        });
+        // CASE 문 생성
+        const idxList = results.map(r => r.idx);
+        const sentCases = results.map(r =>
+            `WHEN ${r.idx} THEN '${r.success ? SENT_FLAG.YES : SENT_FLAG.NO}'`
+        ).join(' ');
 
-        // 트랜잭션 시작
-        connection = await getConnection();
-        await connection.beginTransaction();
+        const resultCodeCases = results.map(r =>
+            `WHEN ${r.idx} THEN '${r.result_code}'`
+        ).join(' ');
+
+        const errorMessageCases = results.map(r =>
+            `WHEN ${r.idx} THEN ${r.error_message ? `'${r.error_message}'` : 'NULL'}`
+        ).join(' ');
 
         const sql = `
       UPDATE r_send_detail
-      SET attempt_count = attempt_count + 1,
-          sent = ?,
-          last_result_code = ?,
-          last_error_message = ?,
-          tx_signature = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE idx = ?
+      SET 
+        sent = CASE idx ${sentCases} END,
+        attempt_count = attempt_count + 1,
+        last_result_code = CASE idx ${resultCodeCases} END,
+        last_error_message = CASE idx ${errorMessageCases} END,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE idx IN (${idxList.join(',')})
     `;
 
-        let totalUpdated = 0;
+        const [result] = await executeQuery(sql, {});
 
-        // 각 결과 업데이트
-        for (const result of results) {
-            const truncatedErrorMessage = result.error_message
-                ? result.error_message.substring(0, 500)
-                : null;
+        console.log(`[SEND MODEL] 배치 업데이트 완료: ${result.affectedRows}개`);
 
-            const [updateResult] = await connection.execute(sql, [
-                result.success ? SENT_FLAG.YES : SENT_FLAG.NO,
-                result.result_code || null,
-                truncatedErrorMessage,
-                result.tx_signature || null,
-                result.idx
-            ]);
-
-            totalUpdated += updateResult.affectedRows;
-        }
-
-        // 트랜잭션 커밋
-        await connection.commit();
-
-        console.log(`[SEND MODEL] 배치 업데이트 완료 - 총 ${totalUpdated}개`);
-
-        return totalUpdated;
+        return result.affectedRows;
 
     } catch (error) {
-        // 트랜잭션 롤백
-        if (connection) {
-            await connection.rollback();
-        }
-
         if (error instanceof SendModelError) {
             throw error;
         }
 
         console.error('[SEND MODEL ERROR] 배치 업데이트 실패:', error.message);
         throw new SendModelError(
-            '배치 결과 업데이트 중 데이터베이스 오류가 발생했습니다.',
+            '배치 업데이트 중 데이터베이스 오류가 발생했습니다.',
             'DB_ERROR',
             error
         );
-    } finally {
-        // 연결 반환
-        if (connection) {
-            connection.release();
-        }
     }
 }
 
 /**
- * 특정 요청의 모든 상세 정보 조회 (관리자용)
+ * 전체 상세 정보 조회
  *
  * @param {string} request_id - 요청 UUID
  * @param {Object} options - 조회 옵션
@@ -1015,27 +861,26 @@ export async function getAllDetails(request_id, options = {}) {
             params.limit = limit;
         }
 
-        // SQL 구성
+        // SQL 구성 (tx_signature 컬럼 제거)
         const sql = `
-      SELECT 
-        idx,
-        request_id,
-        wallet_address,
-        amount,
-        attempt_count,
-        sent,
-        last_result_code,
-        last_error_message,
-        tx_signature,
-        created_at,
-        updated_at
-      FROM r_send_detail
-      WHERE ${whereClauses.join(' AND ')}
-      ORDER BY idx ASC
-      ${limit !== null ? 'LIMIT :limit OFFSET :offset' : ''}
-    `;
+            SELECT
+                idx,
+                request_id,
+                wallet_address,
+                amount,
+                attempt_count,
+                sent,
+                last_result_code,
+                last_error_message,
+                created_at,
+                updated_at
+            FROM r_send_detail
+            WHERE ${whereClauses.join(' AND ')}
+            ORDER BY idx ASC
+                ${limit !== null ? 'LIMIT :limit OFFSET :offset' : ''}
+        `;
 
-        const [rows] = await exec(sql, params);
+        const [rows] = await executeQuery(sql, params);
 
         // 복호화 옵션
         if (decrypt) {
@@ -1099,24 +944,24 @@ export async function listRetryableDetails(request_id, limit = 100) {
         }
 
         const sql = `
-      SELECT 
-        idx, 
-        wallet_address, 
-        amount, 
-        attempt_count,
-        last_result_code,
-        last_error_message,
-        updated_at
-      FROM r_send_detail
-      WHERE request_id = :request_id 
-        AND sent = :sent_no
-        AND attempt_count < :max_retry
-        AND attempt_count > 0
-      ORDER BY updated_at ASC
-      LIMIT :limit
-    `;
+            SELECT
+                idx,
+                wallet_address,
+                amount,
+                attempt_count,
+                last_result_code,
+                last_error_message,
+                updated_at
+            FROM r_send_detail
+            WHERE request_id = :request_id
+              AND sent = :sent_no
+              AND attempt_count < :max_retry
+              AND attempt_count > 0
+            ORDER BY updated_at ASC
+                LIMIT :limit
+        `;
 
-        const [rows] = await exec(sql, {
+        const [rows] = await executeQuery(sql, {
             request_id,
             sent_no: SENT_FLAG.NO,
             max_retry: MAX_RETRY_COUNT,
@@ -1181,17 +1026,17 @@ export async function getDetailStats(request_id) {
         validateRequestId(request_id);
 
         const sql = `
-      SELECT 
-        COUNT(*) AS total,
-        SUM(CASE WHEN sent = 'Y' THEN 1 ELSE 0 END) AS completed,
-        SUM(CASE WHEN sent = 'N' AND attempt_count >= :max_retry THEN 1 ELSE 0 END) AS failed,
-        SUM(CASE WHEN sent = 'N' AND attempt_count = 0 THEN 1 ELSE 0 END) AS pending,
-        SUM(CASE WHEN sent = 'N' AND attempt_count > 0 AND attempt_count < :max_retry THEN 1 ELSE 0 END) AS retryable
-      FROM r_send_detail
-      WHERE request_id = :request_id
-    `;
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN sent = 'Y' THEN 1 ELSE 0 END) AS completed,
+                SUM(CASE WHEN sent = 'N' AND attempt_count >= :max_retry THEN 1 ELSE 0 END) AS failed,
+                SUM(CASE WHEN sent = 'N' AND attempt_count = 0 THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN sent = 'N' AND attempt_count > 0 AND attempt_count < :max_retry THEN 1 ELSE 0 END) AS retryable
+            FROM r_send_detail
+            WHERE request_id = :request_id
+        `;
 
-        const [rows] = await exec(sql, {
+        const [rows] = await executeQuery(sql, {
             request_id,
             max_retry: MAX_RETRY_COUNT
         });
