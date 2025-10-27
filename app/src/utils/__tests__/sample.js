@@ -1,5 +1,5 @@
 // src/utils/sample.js
-// 테스트 환경 확인용 샘플 함수
+// Jest 테스트 환경 확인용 샘플 유틸리티 함수들
 
 /**
  * 두 숫자를 더하는 함수
@@ -23,9 +23,15 @@ export function multiply(a, b) {
 
 /**
  * 문자열이 비어있는지 확인하는 함수
- * @param {string} str - 확인할 문자열
+ * @param {string|null|undefined} str - 확인할 문자열
  * @returns {boolean} 비어있으면 true, 아니면 false
  */
 export function isEmpty(str) {
-    return !str || str.trim().length === 0;
+    // null 또는 undefined인 경우 true 반환
+    if (str == null) {
+        return true;
+    }
+
+    // 문자열로 변환 후 공백 제거하여 길이가 0이면 true
+    return String(str).trim().length === 0;
 }
