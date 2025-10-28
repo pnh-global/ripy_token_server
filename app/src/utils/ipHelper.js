@@ -21,9 +21,16 @@
  */
 export function ipToBinary(ipText) {
     try {
+        // 입력값 기본 검증
+        if (!ipText || typeof ipText !== 'string' || ipText.trim() === '') {
+            throw new Error('유효하지 않은 IPv4 주소');
+        }
+
         // IPv4 처리
         const parts = ipText.split('.').map(Number);
-        if (parts.length !== 4 || parts.some(p => p < 0 || p > 255)) {
+
+        // 옥텟 개수 및 각 값의 유효성 검증
+        if (parts.length !== 4 || parts.some(p => isNaN(p) || p < 0 || p > 255)) {
             throw new Error('유효하지 않은 IPv4 주소');
         }
 

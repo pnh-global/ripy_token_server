@@ -20,13 +20,14 @@
 
 import { getConnection, executeQuery } from '../lib/db.util.js';
 import { encrypt, decrypt as decryptUtil } from '../utils/encryption.js';
-import logger from './logger.js';
 
-// 환경변수에서 마스터 키 로드
-const MASTER_KEY = process.env.ENCRYPTION_KEY;
-
-if (!MASTER_KEY) {
-    throw new Error('ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
+// 환경변수에서 마스터 키 로드 (함수로 변경하여 매번 최신 값 가져오기)
+function getMasterKey() {
+    const key = process.env.ENCRYPTION_KEY;
+    if (!key) {
+        throw new Error('ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
+    }
+    return key;
 }
 
 /**
@@ -41,10 +42,10 @@ function decryptWalletAddresses(rows) {
         try {
             return {
                 ...row,
-                wallet_address: decryptUtil(row.wallet_address, MASTER_KEY)
+                wallet_address: decryptUtil(row.wallet_address, getMasterKey())
             };
         } catch (error) {
-            logger.error('지갑 주소 복호화 실패', {
+            console.error('[SEND MODEL ERROR] 지갑 주소 복호화 실패', {
                 idx: row.idx,
                 error: error.message
             });
@@ -502,7 +503,7 @@ export async function insertSendDetails(request_id, recipients) {
                 validateWalletAddress(recipient.wallet_address);
                 validateAmount(recipient.amount);
                 return {
-                    wallet_address: encrypt(recipient.wallet_address, MASTER_KEY),
+                    wallet_address: encrypt(recipient.wallet_address, getMasterKey()),
                     amount: recipient.amount
                 };
             } catch (error) {
@@ -922,10 +923,10 @@ export async function getAllDetails(request_id, options = {}) {
                 try {
                     return {
                         ...row,
-                        wallet_address: decrypt(row.wallet_address, MASTER_KEY)
+                        wallet_address: decryptUtil(row.wallet_address, getMasterKey())
                     };
                 } catch (error) {
-                    console.error`[SEND MODEL ERROR] 복호화 실패 idx=${row.idx}:`, error.message);
+                    console.error('[SEND MODEL ERROR] 복호화 실패 idx=' + row.idx + ':', error.message);
                     // 복호화 실패 시에도 나머지 데이터는 반환
                     return {
                         ...row,

@@ -16,13 +16,10 @@
  * - 2025-01-27: tx_signature 관련 테스트 제거 (DB 스키마에 맞춤)
  */
 
-
-
-
 import { describe, test, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import { v4 as uuidv4 } from 'uuid';
 import { executeQuery, closePool } from '../../lib/db.util.js';
-import { decryptData } from '../../utils/crypto.js';
+import { decrypt } from '../../utils/encryption.js';
 import {
     // 상수
     SEND_STATUS,
@@ -49,6 +46,13 @@ import {
     listRetryableDetails,
     getDetailStats
 } from '../send.model.js';
+
+// ============================================
+// 테스트 환경 설정
+// ============================================
+
+// 테스트용 암호화 키 설정 (64자 hex 문자열 - AES-256용)
+process.env.ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
 // ============================================
 // 테스트 데이터 및 헬퍼 함수
@@ -238,7 +242,8 @@ describe('send.model.js - 상세 테이블 기본 기능', () => {
 
         expect(details[0].wallet_address).not.toBe(recipients[0].wallet_address);
 
-        const decrypted = decryptData(details[0].wallet_address);
+        // 수정된 부분
+        const decrypted = decrypt(details[0].wallet_address, process.env.ENCRYPTION_KEY);
         expect(decrypted).toBe(recipients[0].wallet_address);
     });
 
