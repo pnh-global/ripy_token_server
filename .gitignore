@@ -38,3 +38,11 @@ Thumbs.db
 # Build
 dist/
 build/
+
+# Database files
+db/
+*.sql
+*.db
+
+# Docker volumes
+volumes/
