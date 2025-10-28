@@ -16,9 +16,12 @@
  * - 2025-01-27: tx_signature 관련 테스트 제거 (DB 스키마에 맞춤)
  */
 
-import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+
+
+
+import { describe, test, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import { v4 as uuidv4 } from 'uuid';
-import { executeQuery } from '../../lib/db.util.js';
+import { executeQuery, closePool } from '../../lib/db.util.js';
 import { decryptData } from '../../utils/crypto.js';
 import {
     // 상수
@@ -316,7 +319,7 @@ describe('send.model.js - 트랜잭션 기능', () => {
 
         const pending = await listPendingDetails(testRequestId);
 
-        // tx_signature 파라미터 제거
+        // 2개 성공 처리
         await updateDetailResult(pending[0].idx, {
             success: true,
             result_code: '200'
@@ -327,11 +330,23 @@ describe('send.model.js - 트랜잭션 기능', () => {
             result_code: '200'
         });
 
+        // 나머지 8개 중 일부를 실패 처리 (재시도 횟수 초과)
+        for (let i = 2; i < 5; i++) {
+            // 3번 시도하여 재시도 횟수 초과시킴
+            for (let attempt = 0; attempt < 3; attempt++) {
+                await updateDetailResult(pending[i].idx, {
+                    success: false,
+                    result_code: '500',
+                    error_message: 'Test failure'
+                });
+            }
+        }
+
         const stats = await refreshMasterStats(testRequestId);
 
         expect(stats.total).toBe(10);
         expect(stats.completed).toBe(2);
-        expect(stats.failed).toBe(8);
+        expect(stats.failed).toBe(3);  // 재시도 횟수를 초과한 항목
     });
 });
 
@@ -461,6 +476,12 @@ describe('send.model.js - 배치 처리', () => {
             expect(detail.last_error_message).toContain('Error');
         });
     });
+});
+
+afterAll(async () => {
+    // DB 연결 풀 종료
+    await closePool();
+    console.log('DB 연결 풀 정리 완료');
 });
 
 console.log('✓ send.model.test.js 테스트 스위트 로드 완료');

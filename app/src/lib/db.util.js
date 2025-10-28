@@ -92,3 +92,10 @@ export async function getPoolStatus() {
         waiting: pool._connectionQueue.length
     };
 }
+
+export async function closePool() {
+    if (pool) {
+        await pool.end();
+        console.log('[DB] 연결 풀 종료');
+    }
+}

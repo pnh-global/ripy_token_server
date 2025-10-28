@@ -20,7 +20,7 @@ describe('ServiceKeys Model', () => {
         const connection = await pool.getConnection();
         await connection.ping();
         connection.release();
-        console.log('✅ serviceKeys.model.test.js - DB 연결 성공');
+        console.log('serviceKeys.model.test.js - DB 연결 성공');
     });
 
     beforeEach(() => {
@@ -46,7 +46,7 @@ describe('ServiceKeys Model', () => {
         }
 
         await pool.end();
-        console.log('✅ serviceKeys.model.test.js - 정리 완료');
+        console.log('serviceKeys.model.test.js - 정리 완료');
     });
 
     describe('createServiceKey', () => {

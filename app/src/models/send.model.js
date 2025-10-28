@@ -331,7 +331,18 @@ export async function getRequestStatus(request_id) {
 
         const [rows] = await executeQuery(sql, { id: request_id });
 
-        return rows.length > 0 ? rows[0] : null;
+        if (rows.length === 0) {
+            return null;
+        }
+
+        // DB에서 조회한 숫자 필드를 명시적으로 숫자로 변환
+        const result = rows[0];
+        return {
+            ...result,
+            total_count: parseInt(result.total_count, 10) || 0,
+            completed_count: parseInt(result.completed_count, 10) || 0,
+            failed_count: parseInt(result.failed_count, 10) || 0
+        };
 
     } catch (error) {
         if (error instanceof SendModelError) {
@@ -379,19 +390,19 @@ export async function refreshMasterStats(request_id) {
         });
 
         const stats = statsRows[0];
-        const total = stats.total || 0;
-        const completed = stats.completed || 0;
-        const failed = stats.failed || 0;
+        const total = parseInt(stats.total, 10) || 0;
+        const completed = parseInt(stats.completed, 10) || 0;
+        const failed = parseInt(stats.failed, 10) || 0;
 
         // 2. 마스터 테이블 업데이트
         const updateSql = `
-      UPDATE r_send_request
-      SET 
-        completed_count = :completed,
-        failed_count = :failed,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE request_id = :request_id
-    `;
+            UPDATE r_send_request
+            SET
+                completed_count = :completed,
+                failed_count = :failed,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE request_id = :request_id
+        `;
 
         await executeQuery(updateSql, {
             request_id,
@@ -1042,11 +1053,11 @@ export async function getDetailStats(request_id) {
         });
 
         const stats = rows[0];
-        const total = stats.total || 0;
-        const completed = stats.completed || 0;
-        const failed = stats.failed || 0;
-        const pending = stats.pending || 0;
-        const retryable = stats.retryable || 0;
+        const total = parseInt(stats.total, 10) || 0;
+        const completed = parseInt(stats.completed, 10) || 0;
+        const failed = parseInt(stats.failed, 10) || 0;
+        const pending = parseInt(stats.pending, 10) || 0;
+        const retryable = parseInt(stats.retryable, 10) || 0;
 
         // 성공률 계산
         const success_rate = total > 0
