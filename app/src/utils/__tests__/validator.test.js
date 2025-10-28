@@ -35,12 +35,12 @@ describe('Validator Utils', () => {
                 '', // 빈 문자열
                 'short', // 너무 짧음
                 'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy1', // 너무 김 (45자)
-                'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21h', // 너무 짧음 (43자)
+                // 'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21h', // 이 줄 제거 또는 주석 처리
                 '0000000000000000000000000000000000000000000', // 유효하지 않은 Base58
-                'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hO', // 'O' 포함 (Base58에 없음)
-                'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21h0', // '0' 포함 (Base58에 없음)
-                'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hI', // 'I' 포함 (Base58에 없음)
-                'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hl', // 'l' 포함 (Base58에 없음)
+                'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hO', // 'O' 포함
+                'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21h0', // '0' 포함
+                'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hI', // 'I' 포함
+                'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hl', // 'l' 포함
                 null,
                 undefined,
                 123,
@@ -160,17 +160,14 @@ describe('Validator Utils', () => {
 
         test('유효한 UUID v4를 검증해야 함', () => {
             const validUUIDs = [
-                '550e8400-e29b-41d4-a716-446655440000',
-                '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
-                'f47ac10b-58cc-4372-a567-0e02b2c3d479'
-                // 여기에 있는 UUID들을 모두 보여주세요
+                '550e8400-e29b-41d4-a716-446655440000', // UUID v4
+                // '6ba7b810-9dad-11d1-80b4-00c04fd430c8', // 이것은 UUID v1이므로 제거
+                'f47ac10b-58cc-4372-a567-0e02b2c3d479', // UUID v4
+                '123e4567-e89b-42d3-a456-426614174000'  // UUID v4
             ];
 
             validUUIDs.forEach(uuid => {
-                console.log('Testing UUID:', uuid); // 디버깅용
-                const result = isValidUUID(uuid);
-                console.log('Result:', result); // 디버깅용
-                expect(result).toBe(true);
+                expect(isValidUUID(uuid)).toBe(true);
             });
         });
 

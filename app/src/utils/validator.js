@@ -27,18 +27,24 @@
  * isSolanaAddress('invalid'); // false
  */
 export function isSolanaAddress(address) {
-    // 타입 검증
+    // 타입 검증 (문자열이 아니면 거부)
     if (typeof address !== 'string') {
         return false;
     }
 
-    // 길이 검증 (Solana 주소는 일반적으로 32-44자)
+    // 빈 문자열 체크
+    if (address.length === 0) {
+        return false;
+    }
+
+    // 길이 검증 (Solana 주소는 32-44자)
     if (address.length < 32 || address.length > 44) {
         return false;
     }
 
     // Base58 문자 집합 검증
     // Base58은 0, O, I, l을 제외한 영숫자
+    // 정확한 Base58 문자셋: 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz
     const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/;
 
     return base58Regex.test(address);
@@ -64,6 +70,22 @@ export function isValidAmount(amount) {
         return false;
     }
 
+    // 배열과 객체 체크 (문자열과 숫자만 허용)
+    if (typeof amount === 'object') {
+        return false;
+    }
+
+    // NaN, Infinity, -Infinity를 먼저 체크 (문자열 변환 전)
+    if (typeof amount === 'number') {
+        if (isNaN(amount) || !isFinite(amount)) {
+            return false;
+        }
+        // 숫자 0도 거부
+        if (amount <= 0) {
+            return false;
+        }
+    }
+
     // 문자열로 변환
     const amountStr = String(amount);
 
@@ -72,10 +94,15 @@ export function isValidAmount(amount) {
         return false;
     }
 
+    // 'NaN', 'Infinity', '-Infinity' 문자열 체크
+    if (amountStr === 'NaN' || amountStr === 'Infinity' || amountStr === '-Infinity') {
+        return false;
+    }
+
     // 숫자로 변환
     const amountNum = Number(amountStr);
 
-    // NaN, Infinity 체크
+    // NaN, Infinity 체크 (문자열에서 변환된 경우)
     if (isNaN(amountNum) || !isFinite(amountNum)) {
         return false;
     }
@@ -114,7 +141,7 @@ export function isValidAmount(amount) {
  *
  * @example
  * sanitizeInput('  Hello World  '); // 'Hello World'
- * sanitizeInput('<script>alert("XSS")</script>'); // ''
+ * sanitizeInput('<script>alert("XSS")</script>'); // 'scriptalert(XSS)/script'
  */
 export function sanitizeInput(input) {
     // null, undefined 처리
@@ -128,11 +155,13 @@ export function sanitizeInput(input) {
     // 앞뒤 공백 제거
     sanitized = sanitized.trim();
 
-    // HTML 태그 제거 (XSS 방지)
+    // 위험한 스크립트 태그가 있으면 내용까지 완전히 제거
+    sanitized = sanitized.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+
+    // 일반 HTML 태그 제거 (태그만 제거, 내용은 유지)
     sanitized = sanitized.replace(/<[^>]*>/g, '');
 
     // SQL Injection 패턴 제거
-    // 작은따옴표, 큰따옴표, 세미콜론, 등호 제거
     sanitized = sanitized.replace(/['";=]/g, '');
 
     // 특수 HTML 문자 이스케이프
@@ -161,15 +190,18 @@ export function sanitizeInput(input) {
  *
  * @example
  * isValidUUID('550e8400-e29b-41d4-a716-446655440000'); // true
+ * isValidUUID('550E8400-E29B-41D4-A716-446655440000'); // true (대소문자 무관)
  */
 export function isValidUUID(uuid) {
+    // 타입 검증
     if (typeof uuid !== 'string') {
         return false;
     }
 
     // UUID v4 정규식 (대소문자 구분 없음)
     // 형식: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-    const uuidV4Regex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+    // y 위치(네 번째 그룹 첫 글자)는 8, 9, a, b만 허용
+    const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
     return uuidV4Regex.test(uuid);
 }
@@ -184,6 +216,7 @@ export function isValidUUID(uuid) {
  * isValidEmail('test@example.com'); // true
  */
 export function isValidEmail(email) {
+    // 타입 검증
     if (typeof email !== 'string') {
         return false;
     }
@@ -205,6 +238,7 @@ export function isValidEmail(email) {
  * isValidIPAddress('192.168.1.1'); // true
  */
 export function isValidIPAddress(ip) {
+    // 타입 검증
     if (typeof ip !== 'string') {
         return false;
     }
