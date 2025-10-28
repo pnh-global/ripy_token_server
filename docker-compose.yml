@@ -2,33 +2,43 @@ services:
   app:
     container_name: ripy-app
     build: ./app
+    network_mode: "host"
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - DB_HOST=host.docker.internal
+      - DB_HOST=127.0.0.1
+      - DB_PORT=3306
       - DB_USER=ripy_user
       - DB_PASSWORD=monivon0070
       - DB_NAME=ripy_token
-    ports:
-      - "4000:4000"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      # 64자 hex 문자열로 변경 (32바이트)
+      - ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      - SOLANA_RPC_ENDPOINT=https://api.devnet.solana.com
+      - RIPY_TOKEN_MINT=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+      - COMPANY_WALLET_SECRET_KEY=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]
+      - USE_SOLANA_MOCK=true
+      - COMPANY_WALLET_ADDRESS=DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy
 
   app_dev:
     container_name: ripy-app-dev
     build: ./app
+    network_mode: "host"
     environment:
       - NODE_ENV=development
       - PORT=4001
-      - DB_HOST=host.docker.internal
+      - DB_HOST=127.0.0.1
+      - DB_PORT=3306
       - DB_USER=ripy_user
       - DB_PASSWORD=monivon0070
       - DB_NAME=ripy_token
+      # 64자 hex 문자열로 변경 (32바이트)
+      - ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      - SOLANA_RPC_ENDPOINT=https://api.devnet.solana.com
+      - RIPY_TOKEN_MINT=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+      - COMPANY_WALLET_SECRET_KEY=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]
+      - USE_SOLANA_MOCK=true
+      - COMPANY_WALLET_ADDRESS=DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy
     command: ["node","server.js"]
-    ports:
-      - "4001:4001"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   nginx:
     image: nginx:1.25
