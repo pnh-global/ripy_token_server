@@ -19,7 +19,43 @@
  */
 
 import { getConnection, executeQuery } from '../lib/db.util.js';
-import { encryptData, decryptData } from '../utils/crypto.js';
+import { encrypt, decrypt as decryptUtil } from '../utils/encryption.js';
+import logger from './logger.js';
+
+// 환경변수에서 마스터 키 로드
+const MASTER_KEY = process.env.ENCRYPTION_KEY;
+
+if (!MASTER_KEY) {
+    throw new Error('ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
+}
+
+/**
+ * 지갑 주소 복호화 헬퍼 함수
+ *
+ * @param {Array} rows - DB에서 조회한 row 배열
+ * @returns {Array} 복호화된 row 배열
+ * @private
+ */
+function decryptWalletAddresses(rows) {
+    return rows.map(row => {
+        try {
+            return {
+                ...row,
+                wallet_address: decryptUtil(row.wallet_address, MASTER_KEY)
+            };
+        } catch (error) {
+            logger.error('지갑 주소 복호화 실패', {
+                idx: row.idx,
+                error: error.message
+            });
+            throw new SendModelError(
+                `지갑 주소 복호화 실패 (idx: ${row.idx})`,
+                'DECRYPTION_ERROR',
+                error
+            );
+        }
+    });
+}
 
 // ============================================
 // 상수 정의
@@ -465,9 +501,8 @@ export async function insertSendDetails(request_id, recipients) {
             try {
                 validateWalletAddress(recipient.wallet_address);
                 validateAmount(recipient.amount);
-
                 return {
-                    wallet_address: encryptData(recipient.wallet_address),
+                    wallet_address: encrypt(recipient.wallet_address, MASTER_KEY),
                     amount: recipient.amount
                 };
             } catch (error) {
@@ -640,21 +675,7 @@ export async function listPendingDetails(request_id, limit = 100) {
         });
 
         // 지갑 주소 복호화
-        const decryptedRows = rows.map(row => {
-            try {
-                return {
-                    ...row,
-                    wallet_address: decryptData(row.wallet_address)
-                };
-            } catch (error) {
-                console.error(`[SEND MODEL ERROR] 복호화 실패 idx=${row.idx}:`, error.message);
-                throw new SendModelError(
-                    `지갑 주소 복호화 실패 (idx: ${row.idx})`,
-                    'DECRYPTION_ERROR',
-                    error
-                );
-            }
-        });
+        const decryptedRows = decryptWalletAddresses(rows);
 
         console.log(`[SEND MODEL] ${decryptedRows.length}개 미전송 항목 조회`);
 
@@ -901,10 +922,10 @@ export async function getAllDetails(request_id, options = {}) {
                 try {
                     return {
                         ...row,
-                        wallet_address: decryptData(row.wallet_address)
+                        wallet_address: decrypt(row.wallet_address, MASTER_KEY)
                     };
                 } catch (error) {
-                    console.error(`[SEND MODEL ERROR] 복호화 실패 idx=${row.idx}:`, error.message);
+                    console.error`[SEND MODEL ERROR] 복호화 실패 idx=${row.idx}:`, error.message);
                     // 복호화 실패 시에도 나머지 데이터는 반환
                     return {
                         ...row,
@@ -982,21 +1003,7 @@ export async function listRetryableDetails(request_id, limit = 100) {
         });
 
         // 지갑 주소 복호화
-        const decryptedRows = rows.map(row => {
-            try {
-                return {
-                    ...row,
-                    wallet_address: decryptData(row.wallet_address)
-                };
-            } catch (error) {
-                console.error(`[SEND MODEL ERROR] 복호화 실패 idx=${row.idx}:`, error.message);
-                throw new SendModelError(
-                    `지갑 주소 복호화 실패 (idx: ${row.idx})`,
-                    'DECRYPTION_ERROR',
-                    error
-                );
-            }
-        });
+        const decryptedRows = decryptWalletAddresses(rows);
 
         console.log(`[SEND MODEL] ${decryptedRows.length}개 재시도 대상 조회`);
 
