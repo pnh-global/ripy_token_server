@@ -13,6 +13,9 @@ export default {
     // transform을 비활성화하여 ES Module을 직접 사용
     transform: {},
 
+    // Jest 글로벌 객체 자동 주입
+    injectGlobals: true,
+
     // 테스트 파일 패턴
     // __tests__ 폴더 안의 .test.js 파일들을 테스트로 인식
     testMatch: [
