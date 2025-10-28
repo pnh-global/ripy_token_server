@@ -156,6 +156,8 @@ function validateWalletAddress(wallet_address) {
  * @param {number} amount - 검증할 금액
  * @throws {SendModelError} 유효하지 않은 금액인 경우
  */
+
+export const RIPY_TOKEN_DECIMALS = 9;
 function validateAmount(amount) {
     if (typeof amount !== 'number' || amount <= 0) {
         throw new SendModelError(
@@ -166,9 +168,9 @@ function validateAmount(amount) {
 
     // RIPY 토큰의 최대 소수점 자리수 확인 (예: 9자리)
     const decimals = amount.toString().split('.')[1]?.length || 0;
-    if (decimals > 9) {
+    if (decimals > RIPY_TOKEN_DECIMALS) {
         throw new SendModelError(
-            'RIPY 토큰은 최대 9자리 소수점까지 지원합니다.',
+            `RIPY 토큰은 최대 ${RIPY_TOKEN_DECIMALS}자리 소수점까지 지원합니다.`,
             'VALIDATION_ERROR'
         );
     }
