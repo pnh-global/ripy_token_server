@@ -1,159 +1,302 @@
 /**
  * log.service.test.js
+ * - log 서비스 계층의 비즈니스 로직 테스트
+ * - writeLog(), getRecentLogs() 함수 검증
  */
 
-import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { pool } from '../../config/db.js';
 
-// 모델 함수들을 mock으로 생성
-const mockInsertLog = jest.fn();
-const mockListLogs = jest.fn();
-
-// 모듈 모킹
-jest.mock('../../models/log.model.js', () => ({
-    insertLog: mockInsertLog,
-    listLogs: mockListLogs
-}));
-
-// logger 모킹
-jest.mock('../../utils/logger.js', () => ({
-    default: {
-        info: jest.fn(),
-        warn: jest.fn(),
-        error: jest.fn()
-    }
-}));
-
-// 모킹 후에 import
+// 실제 서비스 import (mock 없이)
 import { writeLog, getRecentLogs } from '../log.service.js';
 
 describe('Log Service', () => {
 
-    // 각 테스트 전에 mock 초기화
-    beforeEach(() => {
-        jest.clearAllMocks();
+    // 테스트 후 삽입된 데이터 정리
+    let insertedIds = [];
+
+    afterEach(async () => {
+        // 테스트에서 생성된 로그 삭제
+        if (insertedIds.length > 0) {
+            try {
+                const placeholders = insertedIds.map(() => '?').join(',');
+                await pool.execute(
+                    `DELETE FROM r_log WHERE idx IN (${placeholders})`,
+                    insertedIds
+                );
+                insertedIds = [];
+            } catch (error) {
+                console.error('Clean up error:', error);
+            }
+        }
     });
 
+    /**
+     * 테스트 1: writeLog() - 로그 작성 서비스
+     */
     describe('writeLog()', () => {
 
-        test('should successfully write log with valid data', async () => {
-            const mockIdx = 123;
-            // 이제 mockInsertLog 사용
-            mockInsertLog.mockResolvedValue(mockIdx);
-
-            const requestMeta = {
+        test('정상적인 요청으로 로그를 작성할 수 있어야 함', async () => {
+            // Given: Express req 객체 mock
+            const mockReq = {
                 headers: {
-                    'x-forwarded-for': '203.0.113.1'
-                }
+                    'x-forwarded-for': '192.168.1.100',
+                    'host': 'localhost:4000'
+                },
+                ip: '::ffff:192.168.1.100'
             };
 
-            const logData = {
-                cate1: 'sign',
-                cate2: 'create',
-                request_id: 'test-uuid-001',
-                api_name: '/api/sign/create',
+            const body = {
+                cate1: 'test',
+                cate2: 'service',
+                service_key_id: 1,
+                api_name: '/api/test',
                 result_code: '200'
             };
 
-            const result = await writeLog(requestMeta, logData);
+            // When: writeLog 호출
+            const result = await writeLog(mockReq, body);
+            insertedIds.push(result.idx);
 
-            expect(result).toEqual({
-                idx: mockIdx,
-                request_id: 'test-uuid-001'
-            });
+            // Then: 결과 검증
+            expect(result).toHaveProperty('idx');
+            expect(typeof result.idx).toBe('number');
+            expect(result).toHaveProperty('request_id');
+            expect(typeof result.request_id).toBe('string');
 
-            expect(mockInsertLog).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    cate1: 'sign',
-                    cate2: 'create',
-                    req_ip_text: '203.0.113.1'
-                })
+            // DB에서 실제로 저장되었는지 확인
+            const [rows] = await pool.execute(
+                'SELECT * FROM r_log WHERE idx = ?',
+                [result.idx]
             );
+
+            expect(rows).toHaveLength(1);
+            expect(rows[0].cate1).toBe('test');
+            expect(rows[0].cate2).toBe('service');
+            expect(rows[0].req_ip_text).toBe('192.168.1.100');
+            expect(rows[0].req_server).toBe('localhost:4000');
+            expect(rows[0].api_name).toBe('/api/test');
+            expect(rows[0].result_code).toBe('200');
+            expect(rows[0].req_status).toBe('Y');
         });
 
-        test('should handle X-Forwarded-For as array', async () => {
-            const mockIdx = 456;
-            mockInsertLog.mockResolvedValue(mockIdx);
+        test('X-Forwarded-For 헤더가 없을 때 req.ip를 사용해야 함', async () => {
+            // Given: X-Forwarded-For 없는 req
+            const mockReq = {
+                headers: { host: 'localhost:4000' },
+                ip: '203.0.113.45'
+            };
 
-            const requestMeta = {
+            const body = {
+                cate1: 'test',
+                cate2: 'fallback',
+                api_name: '/api/fallback'
+            };
+
+            // When
+            const result = await writeLog(mockReq, body);
+            insertedIds.push(result.idx);
+
+            // Then: req.ip가 사용되었는지 확인
+            const [rows] = await pool.execute(
+                'SELECT * FROM r_log WHERE idx = ?',
+                [result.idx]
+            );
+
+            expect(rows[0].req_ip_text).toBe('203.0.113.45');
+        });
+
+        test('IPv6 주소에서 ::ffff: 접두사를 제거해야 함', async () => {
+            // Given: IPv4-mapped IPv6 주소
+            const mockReq = {
+                headers: {},
+                ip: '::ffff:192.168.1.200'
+            };
+
+            const body = {
+                cate1: 'test',
+                cate2: 'ipv6',
+                api_name: '/api/ipv6test'
+            };
+
+            // When
+            const result = await writeLog(mockReq, body);
+            insertedIds.push(result.idx);
+
+            // Then: ::ffff:가 제거된 IP
+            const [rows] = await pool.execute(
+                'SELECT * FROM r_log WHERE idx = ?',
+                [result.idx]
+            );
+
+            expect(rows[0].req_ip_text).toBe('192.168.1.200');
+        });
+
+        test('body가 없어도 기본값으로 로그를 작성할 수 있어야 함', async () => {
+            // Given: 최소한의 req만 제공
+            const mockReq = {
+                headers: {},
+                ip: '127.0.0.1'
+            };
+
+            // When: body 없이 호출
+            const result = await writeLog(mockReq);
+            insertedIds.push(result.idx);
+
+            // Then: 기본값이 적용되어야 함
+            const [rows] = await pool.execute(
+                'SELECT * FROM r_log WHERE idx = ?',
+                [result.idx]
+            );
+
+            expect(rows[0].cate1).toBe('default');
+            expect(rows[0].cate2).toBe('default');
+            expect(rows[0].api_name).toBe('unknown');
+            expect(rows[0].req_status).toBe('Y');
+            expect(rows[0].result_code).toBe('200');
+        });
+
+        test('X-Forwarded-For가 여러 IP를 포함할 때 첫 번째 IP를 사용해야 함', async () => {
+            // Given: 프록시 체인을 거친 요청
+            const mockReq = {
                 headers: {
-                    'x-forwarded-for': ['203.0.113.1', '198.51.100.1']
-                }
+                    'x-forwarded-for': '203.0.113.1, 192.168.1.1, 10.0.0.1'
+                },
+                ip: '10.0.0.1'
             };
 
-            const logData = {
+            const body = {
                 cate1: 'test',
-                cate2: 'array',
-                request_id: 'test-002'
+                cate2: 'proxy',
+                api_name: '/api/proxy-test'
             };
 
-            await writeLog(requestMeta, logData);
+            // When
+            const result = await writeLog(mockReq, body);
+            insertedIds.push(result.idx);
 
-            expect(mockInsertLog).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    req_ip_text: '203.0.113.1'
-                })
+            // Then: 첫 번째 IP만 사용
+            const [rows] = await pool.execute(
+                'SELECT * FROM r_log WHERE idx = ?',
+                [result.idx]
             );
+
+            expect(rows[0].req_ip_text).toBe('203.0.113.1');
         });
 
-        test('should throw error when cate1 is empty string', async () => {
-            const requestMeta = { headers: {} };
-            const logData = {
-                cate1: '',  // 빈 문자열
-                cate2: 'test',
-                request_id: 'test-err-001'
+        test('request_id가 UUID 형식이어야 함', async () => {
+            // Given
+            const mockReq = {
+                headers: {},
+                ip: '127.0.0.1'
             };
 
-            await expect(writeLog(requestMeta, logData))
-                .rejects
-                .toThrow('cate1 is required and cannot be empty');
+            // When
+            const result = await writeLog(mockReq, {});
+            insertedIds.push(result.idx);
+
+            // Then: UUID v4 형식 검증
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            expect(result.request_id).toMatch(uuidRegex);
         });
 
-        test('should propagate error from model layer', async () => {
-            const dbError = new Error('Database connection failed');
-            mockInsertLog.mockRejectedValue(dbError);
+        test('잘못된 IP 형식이 들어와도 처리할 수 있어야 함', async () => {
+            // Given: 잘못된 형식의 IP
+            const mockReq = {
+                headers: {},
+                ip: '' // 빈 문자열
+            };
 
-            const requestMeta = { headers: {} };
-            const logData = {
+            const body = {
                 cate1: 'test',
-                cate2: 'error',
-                request_id: 'test-err-002'
+                cate2: 'invalid-ip',
+                api_name: '/api/test'
             };
 
-            await expect(writeLog(requestMeta, logData))
-                .rejects
-                .toThrow('Database connection failed');
+            // When
+            const result = await writeLog(mockReq, body);
+            insertedIds.push(result.idx);
+
+            // Then: 기본값 0.0.0.0이 사용되어야 함
+            const [rows] = await pool.execute(
+                'SELECT * FROM r_log WHERE idx = ?',
+                [result.idx]
+            );
+
+            expect(rows[0].req_ip_text).toBe('0.0.0.0');
         });
+
     });
 
+    /**
+     * 테스트 2: getRecentLogs() - 최근 로그 조회 서비스
+     */
     describe('getRecentLogs()', () => {
 
-        test('should retrieve recent logs with default limit', async () => {
-            const mockLogs = [
-                { idx: 1, cate1: 'sign', cate2: 'create' },
-                { idx: 2, cate1: 'contract', cate2: 'get' }
-            ];
-            mockListLogs.mockResolvedValue(mockLogs);
-
-            const result = await getRecentLogs();
-
-            expect(result).toEqual(mockLogs);
-            expect(mockListLogs).toHaveBeenCalledWith(100); // 기본 limit
+        // 테스트용 데이터 생성
+        beforeEach(async () => {
+            // 테스트용 로그 3개 삽입
+            for (let i = 0; i < 3; i++) {
+                const mockReq = {
+                    headers: {},
+                    ip: '127.0.0.1'
+                };
+                const body = {
+                    cate1: 'test',
+                    cate2: 'getRecent',
+                    api_name: `/api/test${i}`
+                };
+                const result = await writeLog(mockReq, body);
+                insertedIds.push(result.idx);
+            }
         });
 
-        test('should cap limit at 1000', async () => {
-            mockListLogs.mockResolvedValue([]);
+        test('기본값으로 최근 20개의 로그를 조회할 수 있어야 함', async () => {
+            // When: 파라미터 없이 호출
+            const logs = await getRecentLogs();
 
-            await getRecentLogs(9999);
+            // Then: 배열이 반환되어야 함
+            expect(Array.isArray(logs)).toBe(true);
+            expect(logs.length).toBeGreaterThanOrEqual(3);
 
-            expect(mockListLogs).toHaveBeenCalledWith(1000);
+            // 최신순 정렬 확인
+            if (logs.length >= 2) {
+                expect(logs[0].idx).toBeGreaterThan(logs[1].idx);
+            }
         });
 
-        test('should set minimum limit to 1', async () => {
-            mockListLogs.mockResolvedValue([]);
+        test('limit 파라미터로 조회 개수를 지정할 수 있어야 함', async () => {
+            // When: limit 2로 호출
+            const logs = await getRecentLogs(2);
 
-            await getRecentLogs(0);
-
-            expect(mockListLogs).toHaveBeenCalledWith(1);
+            // Then: 최대 2개만 반환
+            expect(logs.length).toBeLessThanOrEqual(2);
         });
+
+        test('limit에 큰 숫자를 넘겨도 처리할 수 있어야 함', async () => {
+            // When
+            const logs = await getRecentLogs(100);
+
+            // Then: 에러 없이 조회되어야 함
+            expect(Array.isArray(logs)).toBe(true);
+        });
+
+        test('조회된 로그가 필수 필드를 포함해야 함', async () => {
+            // When
+            const logs = await getRecentLogs(1);
+
+            // Then
+            expect(logs.length).toBeGreaterThan(0);
+            const log = logs[0];
+
+            expect(log).toHaveProperty('idx');
+            expect(log).toHaveProperty('cate1');
+            expect(log).toHaveProperty('cate2');
+            expect(log).toHaveProperty('request_id');
+            expect(log).toHaveProperty('req_ip_text');
+            expect(log).toHaveProperty('api_name');
+        });
+
     });
+
 });
