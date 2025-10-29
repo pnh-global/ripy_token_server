@@ -16,6 +16,14 @@ export default {
     // Jest 글로벌 객체 자동 주입
     injectGlobals: true,
 
+    // ES Module 지원 (추가!)
+    extensionsToTreatAsEsm: ['.js'],
+
+    // 모듈 이름 매핑 (추가!)
+    moduleNameMapper: {
+        '^(\\.{1,2}/.*)\\.js$': '$1',
+    },
+
     // 테스트 파일 패턴
     // __tests__ 폴더 안의 .test.js 파일들을 테스트로 인식
     testMatch: [
@@ -51,8 +59,8 @@ export default {
     // DB 작업이 있으므로 충분한 시간 설정
     testTimeout: 5000,
 
-    // 테스트 실행 전에 실행할 설정 파일
-    // setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+    // 테스트 실행 전에 실행할 설정 파일 (활성화!)
+    setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 
     // 모듈 파일 확장자
     moduleFileExtensions: ['js', 'json', 'node'],
@@ -66,4 +74,9 @@ export default {
     // 각 테스트 파일마다 격리된 환경 제공
     resetMocks: true,
     restoreMocks: true,
+
+    // 테스트 환경 옵션 (추가!)
+    testEnvironmentOptions: {
+        customExportConditions: ['node', 'node-addons'],
+    },
 };
