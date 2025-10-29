@@ -1,15 +1,27 @@
-import { Router } from "express";
-import healthRouter from "./health.routes.js";
-import sendRouter from "./send.routes.js"; // 추가
+/**
+ * routes/index.js
+ *
+ * 모든 라우트를 통합하는 메인 라우터
+ */
+
+import { Router } from 'express';
+import healthRoutes from './health.routes.js';
+import signRoutes from './sign.routes.js';
+// import contractRoutes from './contract.routes.js';  // 향후 추가
+// import solanaRoutes from './solana.routes.js';      // 향후 추가
+// import keyRoutes from './key.routes.js';            // 향후 추가
+// import logRoutes from './log.routes.js';            // 향후 추가
 
 const router = Router();
 
-// /health
-router.use("/health", healthRouter);
-
-// /api/send - 일괄 전송 API
-router.use("/api/send", sendRouter); // 추가
-
-// 앞으로 여기에 /api/log, /api/sign 등 추가 예정
+/**
+ * 라우트 등록
+ */
+router.use('/health', healthRoutes);
+router.use('/api/sign', signRoutes);
+// router.use('/api/contract', contractRoutes);
+// router.use('/api/solana', solanaRoutes);
+// router.use('/api/key', keyRoutes);
+// router.use('/api/log', logRoutes);
 
 export default router;
