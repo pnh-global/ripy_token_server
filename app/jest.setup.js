@@ -20,5 +20,7 @@ global.afterAll = afterAll;
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'error';
 
-// 타임아웃 설정
-jest.setTimeout(10000);
+// 타임아웃만 설정 (jest는 이미 전역에 있음)
+if (typeof jest !== 'undefined') {
+    jest.setTimeout(10000);
+}

@@ -16,16 +16,15 @@ export default {
     // Jest 글로벌 객체 자동 주입
     injectGlobals: true,
 
-    // ES Module 지원 (추가!)
-    extensionsToTreatAsEsm: ['.js'],
+    // extensionsToTreatAsEsm 제거! (package.json에 "type": "module"이 있으면 불필요)
+    // extensionsToTreatAsEsm: ['.js'],
 
-    // 모듈 이름 매핑 (추가!)
-    moduleNameMapper: {
-        '^(\\.{1,2}/.*)\\.js$': '$1',
-    },
+    // moduleNameMapper도 제거 또는 단순화
+    // moduleNameMapper: {
+    //     '^(\\.{1,2}/.*)\\.js$': '$1',
+    // },
 
     // 테스트 파일 패턴
-    // __tests__ 폴더 안의 .test.js 파일들을 테스트로 인식
     testMatch: [
         '**/__tests__/**/*.test.js',
         '**/?(*.)+(spec|test).js'
@@ -37,29 +36,28 @@ export default {
         '/coverage/'
     ],
 
-    // 커버리지 수집 대상 (테스트 커버리지 측정)
+    // 커버리지 수집 대상
     collectCoverageFrom: [
-        'src/**/*.js',              // src 폴더의 모든 .js 파일
-        '!src/**/*.test.js',        // 테스트 파일 제외
-        '!src/**/__tests__/**',     // 테스트 폴더 제외
-        '!src/config/db.js'         // DB 설정 파일 제외 (테스트 불필요)
+        'src/**/*.js',
+        '!src/**/*.test.js',
+        '!src/**/__tests__/**',
+        '!src/config/db.js'
     ],
 
     // 커버리지 리포트 형식
     coverageReporters: [
-        'text',        // 터미널에 텍스트로 출력
-        'lcov',        // HTML 리포트 생성
-        'html'         // HTML 상세 리포트
+        'text',
+        'lcov',
+        'html'
     ],
 
     // 커버리지 디렉토리
     coverageDirectory: 'coverage',
 
-    // 테스트 타임아웃 (5초)
-    // DB 작업이 있으므로 충분한 시간 설정
-    testTimeout: 5000,
+    // 테스트 타임아웃
+    testTimeout: 10000,
 
-    // 테스트 실행 전에 실행할 설정 파일 (활성화!)
+    // 테스트 실행 전에 실행할 설정 파일
     setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 
     // 모듈 파일 확장자
@@ -74,9 +72,4 @@ export default {
     // 각 테스트 파일마다 격리된 환경 제공
     resetMocks: true,
     restoreMocks: true,
-
-    // 테스트 환경 옵션 (추가!)
-    testEnvironmentOptions: {
-        customExportConditions: ['node', 'node-addons'],
-    },
 };
