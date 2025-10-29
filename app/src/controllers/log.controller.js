@@ -13,7 +13,14 @@ import { writeLog, getRecentLogs } from "../services/log.service.js";
  */
 export const createLog = async (req, res, next) => {
     try {
-        const result = await writeLog(req, req.body);
+        // requestMeta 객체 구성 (서비스 계층이 필요한 정보만 전달)
+        const requestMeta = {
+            headers: req.headers,
+            ip: req.ip
+        };
+
+        const result = await writeLog(requestMeta, req.body);
+
         return res.status(201).json({
             ok: true,
             message: "log inserted successfully",
@@ -21,7 +28,6 @@ export const createLog = async (req, res, next) => {
         });
     } catch (err) {
         console.error("createLog Error:", err);
-        // 공통 에러 핸들러(middleware)로 넘기거나 여기서 직접 처리 가능
         return res.status(500).json({
             ok: false,
             error: "Failed to insert log",

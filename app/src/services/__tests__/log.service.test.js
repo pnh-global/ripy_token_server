@@ -4,10 +4,10 @@
  * - writeLog(), getRecentLogs() 함수 검증
  */
 
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import { pool } from '../../config/db.js';
 
-// 실제 서비스 import (mock 없이)
+// 실제 서비스 import
 import { writeLog, getRecentLogs } from '../log.service.js';
 
 describe('Log Service', () => {
@@ -37,8 +37,8 @@ describe('Log Service', () => {
     describe('writeLog()', () => {
 
         test('정상적인 요청으로 로그를 작성할 수 있어야 함', async () => {
-            // Given: Express req 객체 mock
-            const mockReq = {
+            // Given: requestMeta와 logData 준비
+            const requestMeta = {
                 headers: {
                     'x-forwarded-for': '192.168.1.100',
                     'host': 'localhost:4000'
@@ -46,7 +46,7 @@ describe('Log Service', () => {
                 ip: '::ffff:192.168.1.100'
             };
 
-            const body = {
+            const logData = {
                 cate1: 'test',
                 cate2: 'service',
                 service_key_id: 1,
@@ -55,7 +55,7 @@ describe('Log Service', () => {
             };
 
             // When: writeLog 호출
-            const result = await writeLog(mockReq, body);
+            const result = await writeLog(requestMeta, logData);
             insertedIds.push(result.idx);
 
             // Then: 결과 검증
@@ -81,20 +81,20 @@ describe('Log Service', () => {
         });
 
         test('X-Forwarded-For 헤더가 없을 때 req.ip를 사용해야 함', async () => {
-            // Given: X-Forwarded-For 없는 req
-            const mockReq = {
+            // Given: X-Forwarded-For 없는 requestMeta
+            const requestMeta = {
                 headers: { host: 'localhost:4000' },
                 ip: '203.0.113.45'
             };
 
-            const body = {
+            const logData = {
                 cate1: 'test',
                 cate2: 'fallback',
                 api_name: '/api/fallback'
             };
 
             // When
-            const result = await writeLog(mockReq, body);
+            const result = await writeLog(requestMeta, logData);
             insertedIds.push(result.idx);
 
             // Then: req.ip가 사용되었는지 확인
@@ -108,19 +108,19 @@ describe('Log Service', () => {
 
         test('IPv6 주소에서 ::ffff: 접두사를 제거해야 함', async () => {
             // Given: IPv4-mapped IPv6 주소
-            const mockReq = {
+            const requestMeta = {
                 headers: {},
                 ip: '::ffff:192.168.1.200'
             };
 
-            const body = {
+            const logData = {
                 cate1: 'test',
                 cate2: 'ipv6',
                 api_name: '/api/ipv6test'
             };
 
             // When
-            const result = await writeLog(mockReq, body);
+            const result = await writeLog(requestMeta, logData);
             insertedIds.push(result.idx);
 
             // Then: ::ffff:가 제거된 IP
@@ -132,15 +132,21 @@ describe('Log Service', () => {
             expect(rows[0].req_ip_text).toBe('192.168.1.200');
         });
 
-        test('body가 없어도 기본값으로 로그를 작성할 수 있어야 함', async () => {
-            // Given: 최소한의 req만 제공
-            const mockReq = {
+        test('최소한의 필수 필드만 있어도 로그를 작성할 수 있어야 함', async () => {
+            // Given: 최소한의 필수 필드만 제공
+            const requestMeta = {
                 headers: {},
                 ip: '127.0.0.1'
             };
 
-            // When: body 없이 호출
-            const result = await writeLog(mockReq);
+            const logData = {
+                cate1: 'test',
+                cate2: 'minimal',
+                api_name: '/api/minimal'
+            };
+
+            // When
+            const result = await writeLog(requestMeta, logData);
             insertedIds.push(result.idx);
 
             // Then: 기본값이 적용되어야 함
@@ -149,30 +155,31 @@ describe('Log Service', () => {
                 [result.idx]
             );
 
-            expect(rows[0].cate1).toBe('default');
-            expect(rows[0].cate2).toBe('default');
-            expect(rows[0].api_name).toBe('unknown');
+            expect(rows[0].cate1).toBe('test');
+            expect(rows[0].cate2).toBe('minimal');
+            expect(rows[0].api_name).toBe('/api/minimal');
             expect(rows[0].req_status).toBe('Y');
             expect(rows[0].result_code).toBe('200');
+            expect(rows[0].req_ip_text).toBe('127.0.0.1');
         });
 
         test('X-Forwarded-For가 여러 IP를 포함할 때 첫 번째 IP를 사용해야 함', async () => {
             // Given: 프록시 체인을 거친 요청
-            const mockReq = {
+            const requestMeta = {
                 headers: {
                     'x-forwarded-for': '203.0.113.1, 192.168.1.1, 10.0.0.1'
                 },
                 ip: '10.0.0.1'
             };
 
-            const body = {
+            const logData = {
                 cate1: 'test',
                 cate2: 'proxy',
                 api_name: '/api/proxy-test'
             };
 
             // When
-            const result = await writeLog(mockReq, body);
+            const result = await writeLog(requestMeta, logData);
             insertedIds.push(result.idx);
 
             // Then: 첫 번째 IP만 사용
@@ -186,13 +193,19 @@ describe('Log Service', () => {
 
         test('request_id가 UUID 형식이어야 함', async () => {
             // Given
-            const mockReq = {
+            const requestMeta = {
                 headers: {},
                 ip: '127.0.0.1'
             };
 
+            const logData = {
+                cate1: 'test',
+                cate2: 'uuid',
+                api_name: '/api/uuid-test'
+            };
+
             // When
-            const result = await writeLog(mockReq, {});
+            const result = await writeLog(requestMeta, logData);
             insertedIds.push(result.idx);
 
             // Then: UUID v4 형식 검증
@@ -202,19 +215,19 @@ describe('Log Service', () => {
 
         test('잘못된 IP 형식이 들어와도 처리할 수 있어야 함', async () => {
             // Given: 잘못된 형식의 IP
-            const mockReq = {
+            const requestMeta = {
                 headers: {},
                 ip: '' // 빈 문자열
             };
 
-            const body = {
+            const logData = {
                 cate1: 'test',
                 cate2: 'invalid-ip',
                 api_name: '/api/test'
             };
 
             // When
-            const result = await writeLog(mockReq, body);
+            const result = await writeLog(requestMeta, logData);
             insertedIds.push(result.idx);
 
             // Then: 기본값 0.0.0.0이 사용되어야 함
@@ -224,6 +237,23 @@ describe('Log Service', () => {
             );
 
             expect(rows[0].req_ip_text).toBe('0.0.0.0');
+        });
+
+        test('필수 필드가 누락되면 에러를 throw해야 함', async () => {
+            // Given: 필수 필드 누락
+            const requestMeta = {
+                headers: {},
+                ip: '127.0.0.1'
+            };
+
+            const logData = {
+                cate1: 'test',
+                // cate2 누락
+                api_name: '/api/test'
+            };
+
+            // When & Then: 에러 발생
+            await expect(writeLog(requestMeta, logData)).rejects.toThrow('cate2 is required');
         });
 
     });
@@ -237,16 +267,16 @@ describe('Log Service', () => {
         beforeEach(async () => {
             // 테스트용 로그 3개 삽입
             for (let i = 0; i < 3; i++) {
-                const mockReq = {
+                const requestMeta = {
                     headers: {},
                     ip: '127.0.0.1'
                 };
-                const body = {
+                const logData = {
                     cate1: 'test',
                     cate2: 'getRecent',
                     api_name: `/api/test${i}`
                 };
-                const result = await writeLog(mockReq, body);
+                const result = await writeLog(requestMeta, logData);
                 insertedIds.push(result.idx);
             }
         });
@@ -274,8 +304,8 @@ describe('Log Service', () => {
         });
 
         test('limit에 큰 숫자를 넘겨도 처리할 수 있어야 함', async () => {
-            // When
-            const logs = await getRecentLogs(100);
+            // When: limit 1000으로 호출 (내부적으로 1000으로 제한됨)
+            const logs = await getRecentLogs(1500);
 
             // Then: 에러 없이 조회되어야 함
             expect(Array.isArray(logs)).toBe(true);
