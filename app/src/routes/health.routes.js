@@ -26,6 +26,14 @@ import { health } from "../controllers/health.controller.js";
 
 const router = Router();
 
+/**
+ * @swagger
+ * tags:
+ *   name: Health
+ *   description: 서버 상태 확인 API
+ */
+
+// GET /health - 헬스 체크
 router.get("/", asyncHandler(health));
 
 export default router;

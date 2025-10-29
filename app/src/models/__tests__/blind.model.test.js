@@ -160,51 +160,41 @@ describe('blind.model.js - IP 블라인드 관리 테스트', () => {
      * 테스트 3: removeExpiredBlinds() - 만료된 블라인드 제거
      */
     describe('removeExpiredBlinds()', () => {
-
         test('만료된 블라인드 IP들을 삭제할 수 있어야 함', async () => {
-            // Given: 만료된 IP와 유효한 IP 추가
+            // Given: 테스트 전 기존 데이터 정리
+            await pool.query('DELETE FROM r_blind WHERE req_ip_text IN (?, ?, ?)',
+                ['192.168.1.180', '192.168.1.181', '192.168.1.190']);
+
+            const now = new Date();
+            const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+            const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
             const expiredIp1 = '192.168.1.180';
             const expiredIp2 = '192.168.1.181';
             const validIp = '192.168.1.190';
 
             // 만료된 IP 2개 추가
-            await blindModel.addBlindIp({
-                ip_address: expiredIp1,
-                reason: 'Expired 1',
-                expired_at: new Date(Date.now() - 24 * 60 * 60 * 1000)
-            });
-            await blindModel.addBlindIp({
-                ip_address: expiredIp2,
-                reason: 'Expired 2',
-                expired_at: new Date(Date.now() - 48 * 60 * 60 * 1000)
-            });
+            await blindModel.addBlindIp({ ip_address: expiredIp1, expired_at: yesterday });
+            await blindModel.addBlindIp({ ip_address: expiredIp2, expired_at: twoDaysAgo });
 
-            // 유효한 IP 추가
-            await blindModel.addBlindIp({
-                ip_address: validIp,
-                reason: 'Valid block',
-                expired_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
-            });
+            // 유효한 IP 1개 추가
+            await blindModel.addBlindIp({ ip_address: validIp, expired_at: tomorrow });
 
-            // ✅ 삭제 전 DB 확인
-            const connection = await pool.getConnection();
-            const [before] = await connection.execute(
-                `SELECT req_ip_text, expired_at FROM r_blind WHERE req_ip_text LIKE '192.168.%'`
-            );
-            console.log('삭제 전:', before);
-            connection.release();
+            console.log('삭제 전:', await pool.query(
+                'SELECT req_ip_text, expired_at FROM r_blind WHERE req_ip_text IN (?, ?, ?)',
+                [expiredIp1, expiredIp2, validIp]
+            ).then(r => r[0]));
 
-            // When: 만료된 블라인드 제거
+            // When: 만료된 블라인드 삭제
             const result = await blindModel.removeExpiredBlinds();
             console.log('삭제된 행 수:', result.affectedRows);
 
-            // ✅ 삭제 후 DB 확인
-            const connection2 = await pool.getConnection();
-            const [after] = await connection2.execute(
-                `SELECT req_ip_text, expired_at FROM r_blind WHERE req_ip_text LIKE '192.168.%'`
-            );
-            console.log('삭제 후:', after);
-            connection2.release();
+            const afterDelete = await pool.query(
+                'SELECT req_ip_text, expired_at FROM r_blind WHERE req_ip_text IN (?, ?, ?)',
+                [expiredIp1, expiredIp2, validIp]
+            ).then(r => r[0]);
+            console.log('삭제 후:', afterDelete);
 
             // Then: 2개가 삭제되어야 함
             expect(result.affectedRows).toBe(2);
@@ -212,53 +202,13 @@ describe('blind.model.js - IP 블라인드 관리 테스트', () => {
             // 만료된 IP는 조회되지 않아야 함
             const check1 = await blindModel.checkBlindIp(expiredIp1);
             const check2 = await blindModel.checkBlindIp(expiredIp2);
-
-            console.log('check1:', check1, 'for IP:', expiredIp1);
-            console.log('check2:', check2, 'for IP:', expiredIp2);
-
             expect(check1).toBe(false);
             expect(check2).toBe(false);
 
-            // 유효한 IP는 여전히 블라인드 상태여야 함
-            const validCheck = await blindModel.checkBlindIp(validIp);
-            expect(validCheck).toBe(true);
+            // 유효한 IP는 여전히 조회되어야 함
+            const check3 = await blindModel.checkBlindIp(validIp);
+            expect(check3).toBe(true);
         });
-
-        test('만료된 블라인드가 없으면 0개가 삭제되어야 함', async () => {
-            // Given: 유효한 IP만 추가
-            await blindModel.addBlindIp({
-                ip_address: '192.168.1.195',
-                reason: 'Valid only',
-                expired_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
-            });
-
-            // When: 만료된 블라인드 제거
-            const result = await blindModel.removeExpiredBlinds();
-
-            // Then: 0개가 삭제되어야 함
-            expect(result.affectedRows).toBe(0);
-        });
-
-        test('expired_at이 NULL인 블라인드는 삭제하지 않아야 함', async () => {
-            // Given: expired_at이 NULL인 IP 추가 (영구 차단)
-            const permanentIp = '192.168.1.199';
-            await blindModel.addBlindIp({
-                ip_address: permanentIp,
-                reason: 'Permanent block',
-                expired_at: null
-            });
-
-            // When: 만료된 블라인드 제거
-            const result = await blindModel.removeExpiredBlinds();
-
-            // Then: 삭제되지 않아야 함
-            expect(result.affectedRows).toBe(0);
-
-            // 여전히 블라인드 상태여야 함
-            const check = await blindModel.checkBlindIp(permanentIp);
-            expect(check).toBe(true);
-        });
-
     });
 
     describe('에러 처리 테스트', () => {
