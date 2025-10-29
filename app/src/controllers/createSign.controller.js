@@ -312,7 +312,14 @@ export async function createSign(req, res) {
 
         // 2. 데이터 복호화
         // 웹서버가 service key로 암호화한 데이터를 복호화
-        const decryptedString = decrypt(req.body.data);
+        // 주의: 현재는 ENCRYPTION_KEY(마스터 키)로 복호화
+        // 향후 service key별로 다른 키를 사용할 경우 수정 필요
+        const encryptionKey = process.env.ENCRYPTION_KEY;
+        if (!encryptionKey) {
+            throw new Error('ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
+        }
+
+        const decryptedString = decrypt(req.body.data, encryptionKey);
         decryptedData = JSON.parse(decryptedString);
 
         // 3. 입력값 검증

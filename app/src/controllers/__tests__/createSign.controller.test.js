@@ -4,6 +4,18 @@
  * POST /api/sign/create 엔드포인트 테스트
  */
 
+// ============================================
+// 테스트 환경변수 설정 (반드시 import보다 먼저!)
+// ============================================
+process.env.ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+process.env.NODE_ENV = 'test';
+process.env.COMPANY_WALLET_ADDRESS = 'CompanyWallet1234567890123456789012345';
+process.env.RIPY_TOKEN_MINT_ADDRESS = 'RIPYTokenMint1234567890123456789012345';
+process.env.SOLANA_RPC_URL = 'https://api.devnet.solana.com';
+
+// ============================================
+// 모듈 Import
+// ============================================
 import { describe, test, expect, jest, beforeAll, beforeEach, afterEach, afterAll } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
@@ -12,12 +24,6 @@ import { asyncHandler } from '../../middlewares/asyncHandler.js';
 import { errorHandler } from '../../middlewares/errorHandler.js';
 import { pool } from '../../config/db.js';
 import { encrypt } from '../../utils/encryption.js';
-
-// 테스트 환경변수 설정
-process.env.ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-process.env.COMPANY_WALLET_ADDRESS = 'CompanyWallet1234567890123456789012345';
-process.env.RIPY_TOKEN_MINT_ADDRESS = 'RIPYTokenMint1234567890123456789012345';
-process.env.SOLANA_RPC_URL = 'https://api.devnet.solana.com';
 
 // Solana 트랜잭션 서비스 Mock
 jest.unstable_mockModule('../../services/transactionService.js', () => ({
@@ -85,12 +91,12 @@ describe('POST /api/sign/create - 부분 서명 트랜잭션 생성', () => {
         const testData = {
             cate1: 'TEST',
             cate2: '1',
-            sender: 'TEST_Sender_1234567890123456789012345',
+            sender: 'TestSender1111111111111111111111111111',
             recipient: 'TEST_Recipient_0987654321098765432109',
             ripy: '100.5'
         };
 
-        const encryptedData = encrypt(JSON.stringify(testData));
+        const encryptedData = encrypt(JSON.stringify(testData), process.env.ENCRYPTION_KEY);
 
         const response = await request(app)
             .post('/api/sign/create')
@@ -121,7 +127,7 @@ describe('POST /api/sign/create - 부분 서명 트랜잭션 생성', () => {
             ripy: '100.5'
         };
 
-        const encryptedData = encrypt(JSON.stringify(testData));
+        const encryptedData = encrypt(JSON.stringify(testData), process.env.ENCRYPTION_KEY);
 
         const response = await request(app)
             .post('/api/sign/create')
@@ -144,7 +150,7 @@ describe('POST /api/sign/create - 부분 서명 트랜잭션 생성', () => {
             ripy: '100.5'
         };
 
-        const encryptedData = encrypt(JSON.stringify(testData));
+        const encryptedData = encrypt(JSON.stringify(testData), process.env.ENCRYPTION_KEY);
 
         const response = await request(app)
             .post('/api/sign/create')
@@ -162,12 +168,12 @@ describe('POST /api/sign/create - 부분 서명 트랜잭션 생성', () => {
         const testData = {
             cate1: 'TEST',
             cate2: '1',
-            sender: 'TEST_Sender_1234567890123456789012345',
+            sender: 'TestSender1111111111111111111111111111',
             recipient: 'TEST_Recipient_0987654321098765432109',
             ripy: '-100'  // 음수 금액
         };
 
-        const encryptedData = encrypt(JSON.stringify(testData));
+        const encryptedData = encrypt(JSON.stringify(testData), process.env.ENCRYPTION_KEY);
 
         const response = await request(app)
             .post('/api/sign/create')
@@ -197,12 +203,12 @@ describe('POST /api/sign/create - 부분 서명 트랜잭션 생성', () => {
         const testData = {
             cate1: 'TEST',
             cate2: '1',
-            sender: 'TEST_Sender_1234567890123456789012345',
+            sender: 'TestSender1111111111111111111111111111',
             recipient: 'TEST_Recipient_0987654321098765432109',
             ripy: '100.5'
         };
 
-        const encryptedData = encrypt(JSON.stringify(testData));
+        const encryptedData = encrypt(JSON.stringify(testData), process.env.ENCRYPTION_KEY);
 
         const response = await request(app)
             .post('/api/sign/create')
@@ -223,7 +229,7 @@ describe('POST /api/sign/create - 부분 서명 트랜잭션 생성', () => {
             ripy: '200.75'
         };
 
-        const encryptedData = encrypt(JSON.stringify(testData));
+        const encryptedData = encrypt(JSON.stringify(testData), process.env.ENCRYPTION_KEY);
 
         const response = await request(app)
             .post('/api/sign/create')
@@ -255,7 +261,7 @@ describe('POST /api/sign/create - 부분 서명 트랜잭션 생성', () => {
             ripy: '50.25'
         };
 
-        const encryptedData = encrypt(JSON.stringify(testData));
+        const encryptedData = encrypt(JSON.stringify(testData), process.env.ENCRYPTION_KEY);
 
         await request(app)
             .post('/api/sign/create')
