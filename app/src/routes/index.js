@@ -1,27 +1,33 @@
-/**
- * routes/index.js
- *
- * 모든 라우트를 통합하는 메인 라우터
- */
-
-import { Router } from 'express';
-import healthRoutes from './health.routes.js';
-import signRoutes from './sign.routes.js';
-// import contractRoutes from './contract.routes.js';  // 향후 추가
-// import solanaRoutes from './solana.routes.js';      // 향후 추가
-// import keyRoutes from './key.routes.js';            // 향후 추가
-// import logRoutes from './log.routes.js';            // 향후 추가
+import { Router } from "express";
+import healthRouter from "./health.routes.js";
+import sendRouter from "./send.routes.js";
 
 const router = Router();
 
-/**
- * 라우트 등록
- */
-router.use('/health', healthRoutes);
-router.use('/api/sign', signRoutes);
-// router.use('/api/contract', contractRoutes);
-// router.use('/api/solana', solanaRoutes);
-// router.use('/api/key', keyRoutes);
-// router.use('/api/log', logRoutes);
+// Health 체크 - 루트에서 직접 처리
+router.get("/health", async (req, res) => {
+    try {
+        // DB 연결 체크 (선택사항)
+        // const [rows] = await pool.query("SELECT 1");
+
+        res.json({
+            success: true,
+            status: "healthy",
+            timestamp: new Date().toISOString(),
+            environment: process.env.NODE_ENV || "unknown"
+        });
+    } catch (error) {
+        res.status(503).json({
+            success: false,
+            status: "unhealthy",
+            error: error.message
+        });
+    }
+});
+
+// 다른 API 라우트
+router.use("/api/send", sendRouter);
+
+// 앞으로 여기에 /api/log, /api/sign 등 추가 예정
 
 export default router;

@@ -22,7 +22,7 @@
 
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { health } from "../controllers/health.controller.js";
+import { healthCheck } from "../controllers/health.controller.js";
 
 const router = Router();
 
@@ -34,6 +34,6 @@ const router = Router();
  */
 
 // GET /health - 헬스 체크
-router.get("/", asyncHandler(health));
+router.get("/", asyncHandler(healthCheck));
 
 export default router;

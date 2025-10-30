@@ -1,12 +1,20 @@
 FROM node:20-alpine
-WORKDIR /usr/src/app
 
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# package.json 복사 및 의존성 설치
 COPY package*.json ./
-# lockfile 있으면 ci, 없으면 install
 RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
 
+# 전체 소스 코드 복사
 COPY . .
 
+# 환경 변수
 ENV PORT=4000
+
+# 포트 노출
 EXPOSE 4000 4001
-CMD ["node","server.js"]
+
+# 애플리케이션 시작
+CMD ["node", "server.js"]
