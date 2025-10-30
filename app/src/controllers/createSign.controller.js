@@ -20,11 +20,12 @@
  * @module controllers/createSign
  */
 
+// 파일 상단
 import { decrypt, encrypt } from '../utils/encryption.js';
 import { isSolanaAddress, isValidAmount } from '../utils/validator.js';
 import { createContract } from '../models/contract.model.js';
 import { insertLog } from '../models/log.model.js';
-import { createPartialSignedTransaction } from '../services/transactionService.js';
+import { createPartialSignedTransaction } from '../services/transactionService.js';  // 다시 추가!
 
 /**
  * 입력값 검증 함수
@@ -54,23 +55,32 @@ import { createPartialSignedTransaction } from '../services/transactionService.j
  * // Returns: true
  */
 function validateInput(data) {
+    console.log('[VALIDATE DEBUG] 검증 시작:', JSON.stringify(data, null, 2));
+
     // 1. 필수 필드 검증
     const requiredFields = ['cate1', 'cate2', 'sender', 'recipient', 'ripy'];
 
     for (const field of requiredFields) {
         if (!data[field]) {
+            console.log('[VALIDATE DEBUG] 필드 누락:', field, '값:', data[field]);
             throw new Error(`필수 필드가 누락되었습니다: ${field}`);
         }
     }
 
     // 2. Solana 주소 검증
+    console.log('[VALIDATE DEBUG] sender 검증 시작:', data.sender);
     if (!isSolanaAddress(data.sender)) {
+        console.log('[VALIDATE DEBUG] sender 검증 실패');
         throw new Error('유효하지 않은 발신자 주소입니다.');
     }
+    console.log('[VALIDATE DEBUG] sender 검증 통과');
 
+    console.log('[VALIDATE DEBUG] recipient 검증 시작:', data.recipient);
     if (!isSolanaAddress(data.recipient)) {
+        console.log('[VALIDATE DEBUG] recipient 검증 실패');
         throw new Error('유효하지 않은 수신자 주소입니다.');
     }
+    console.log('[VALIDATE DEBUG] recipient 검증 통과');
 
     // 3. 금액 검증
     if (!isValidAmount(data.ripy)) {
@@ -334,10 +344,18 @@ export async function createSign(req, res) {
         if (!feepayer) {
             throw new Error('회사 지갑 주소가 설정되지 않았습니다.');
         }
+        console.log('[CONTROLLER DEBUG] feepayer:', feepayer);
+        console.log('[CONTROLLER DEBUG] validation 통과, contract 생성 시작');
 
         // 5. r_contract 테이블에 계약서 생성
         // - signed_or_not1='N': 발신자 아직 서명 안함
         // - signed_or_not2='N': 수신자 아직 서명 안함
+        console.log('[CONTROLLER DEBUG] createContract 호출 전 - 파라미터:', {
+            sender: decryptedData.sender,
+            recipient: decryptedData.recipient,
+            feepayer: feepayer
+        });
+
         const contract = await createContract({
             cate1: decryptedData.cate1,
             cate2: decryptedData.cate2,
@@ -349,25 +367,41 @@ export async function createSign(req, res) {
             signed_or_not2: 'N'
         });
 
+        console.log('[CONTROLLER DEBUG] contract 생성 완료:', contract.idx);
+
         contractIdx = contract.idx;
 
-        // 6. Solana 부분 서명 트랜잭션 생성
-        // - SPL Token Transfer Instruction 생성
-        // - 회사 지갑으로 feepayer 서명
-        // - Base64로 직렬화하여 반환
-        const partialSignedTx = await createPartialSignedTransaction({
-            sender: decryptedData.sender,
-            recipient: decryptedData.recipient,
+        console.log('[CONTROLLER DEBUG] createPartialSignedTransaction 호출 전');
+        console.log('[CONTROLLER DEBUG] 파라미터:', {
+            fromPubkey: decryptedData.sender,
+            toPubkey: decryptedData.recipient,
             amount: parseFloat(decryptedData.ripy),
-            feepayer: feepayer
+            tokenMint: process.env.RIPY_TOKEN_MINT_ADDRESS
         });
+
+        // 6. Solana 부분 서명 트랜잭션 생성
+        let partialSignedTx;
+        try {
+            partialSignedTx = await createPartialSignedTransaction({
+                fromPubkey: decryptedData.sender,
+                toPubkey: decryptedData.recipient,
+                amount: parseFloat(decryptedData.ripy),
+                tokenMint: process.env.RIPY_TOKEN_MINT_ADDRESS
+            });
+            console.log('[CONTROLLER DEBUG] createPartialSignedTransaction 완료:', partialSignedTx);
+        } catch (txError) {
+            console.error('[CONTROLLER DEBUG] createPartialSignedTransaction 에러:', txError);
+            console.error('[CONTROLLER DEBUG] 에러 메시지:', txError.message);
+            console.error('[CONTROLLER DEBUG] 에러 스택:', txError.stack);
+            throw txError; // 에러를 다시 던져서 외부 catch에서 처리
+        }
 
         // 7. 성공 로그 기록
         const latencyMs = Date.now() - startTime;
         await insertLog({
             cate1: decryptedData.cate1,
             cate2: decryptedData.cate2,
-            request_id: null,
+            request_id: `sign-${contractIdx}-${Date.now()}`,  // 고유한 request_id 생성
             service_key_id: req.serviceKey?.idx || null,
             req_ip_text: req.ip || '0.0.0.0',
             req_server: req.hostname || null,

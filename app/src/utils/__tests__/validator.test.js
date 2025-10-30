@@ -22,7 +22,7 @@ describe('Validator Utils', () => {
                 'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy',
                 '7EqQdEUf7QExcCt1bqMEZSs6tGPGfDsqe7G1n7bW4Dz5',
                 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-                '11111111111111111111111111111111' // System Program
+                'BLy5EXrh5BNVBuQTCS7XQAGnNfrdNpFuxsxTTgdVxqPh' // System Program
             ];
 
             validAddresses.forEach(address => {

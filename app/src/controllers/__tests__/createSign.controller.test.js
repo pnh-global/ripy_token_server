@@ -14,31 +14,41 @@ process.env.RIPY_TOKEN_MINT_ADDRESS = 'RIPYTokenMint1234567890123456789012345';
 process.env.SOLANA_RPC_URL = 'https://api.devnet.solana.com';
 
 // ============================================
-// 모듈 Import
+// Mock 설정 (반드시 모든 import보다 먼저!)
 // ============================================
-import { describe, test, expect, jest, beforeAll, beforeEach, afterEach, afterAll } from '@jest/globals';
+import { jest } from '@jest/globals';
+
+const mockCreatePartialSignedTransaction = jest.fn(async ({ sender, recipient, amount, feepayer }) => {
+    // Mock 함수가 호출되었는지 로그 출력
+    console.log('[MOCK] createPartialSignedTransaction 호출됨');
+    return {
+        transaction: 'MOCK_BASE64_TRANSACTION_STRING',
+        feepayer: feepayer,
+        sender: sender,
+        recipient: recipient,
+        amount: amount,
+        blockhash: 'MOCK_BLOCKHASH_1234567890',
+        lastValidBlockHeight: 123456789
+    };
+});
+
+jest.unstable_mockModule('../../services/transactionService.js', () => ({
+    createPartialSignedTransaction: mockCreatePartialSignedTransaction
+}));
+
+// ============================================
+// 모듈 Import (Mock 이후에!)
+// ============================================
+import { describe, test, expect, beforeAll, beforeEach, afterEach, afterAll } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
-import { createSign } from '../createSign.controller.js';
-import { asyncHandler } from '../../middlewares/asyncHandler.js';
-import { errorHandler } from '../../middlewares/errorHandler.js';
-import { pool } from '../../config/db.js';
-import { encrypt } from '../../utils/encryption.js';
 
-// Solana 트랜잭션 서비스 Mock
-jest.unstable_mockModule('../../services/transactionService.js', () => ({
-    createPartialSignedTransaction: jest.fn(async ({ sender, recipient, amount, feepayer }) => {
-        return {
-            transaction: 'MOCK_BASE64_TRANSACTION_STRING',
-            feepayer: feepayer,
-            sender: sender,
-            recipient: recipient,
-            amount: amount,
-            blockhash: 'MOCK_BLOCKHASH_1234567890',
-            lastValidBlockHeight: 123456789
-        };
-    })
-}));
+// Dynamic import로 컨트롤러 로드
+const { createSign } = await import('../createSign.controller.js');
+const { asyncHandler } = await import('../../middlewares/asyncHandler.js');
+const { errorHandler } = await import('../../middlewares/errorHandler.js');
+const { pool } = await import('../../config/db.js');
+const { encrypt } = await import('../../utils/encryption.js');
 
 // Express 앱 생성 (테스트용)
 const app = express();
@@ -91,7 +101,7 @@ describe('POST /api/sign/create - 부분 서명 트랜잭션 생성', () => {
         const testData = {
             cate1: 'TEST',
             cate2: '1',
-            sender: 'TestSender1111111111111111111111111111',
+            sender: 'TEST_Sender_1111111111111111111111111111',
             recipient: 'TEST_Recipient_0987654321098765432109',
             ripy: '100.5'
         };
@@ -257,8 +267,8 @@ describe('POST /api/sign/create - 부분 서명 트랜잭션 생성', () => {
             cate1: 'TEST',
             cate2: '1',
             sender: 'TEST_Sender_Log_Check_123456789012',
-            recipient: 'TEST_Recipient_Log_Check_098765',
-            ripy: '50.25'
+            recipient: 'TEST_Recipient_Log_Check_0987651',
+            ripy: '50.25'  // 이 줄 추가!
         };
 
         const encryptedData = encrypt(JSON.stringify(testData), process.env.ENCRYPTION_KEY);

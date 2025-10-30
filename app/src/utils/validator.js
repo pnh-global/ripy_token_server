@@ -39,7 +39,10 @@ export function isSolanaAddress(address) {
 
     // 테스트 환경에서는 TEST로 시작하는 주소도 허용
     if (process.env.NODE_ENV === 'test' && address.startsWith('TEST')) {
-        return address.length >= 32 && address.length <= 50;
+        console.log('[VALIDATOR DEBUG] 테스트 주소 검증:', address, '길이:', address.length);
+        const isValid = address.length >= 32 && address.length <= 50;
+        console.log('[VALIDATOR DEBUG] 검증 결과:', isValid);
+        return isValid;
     }
 
     // 길이 검증 (Solana 주소는 32-44자)

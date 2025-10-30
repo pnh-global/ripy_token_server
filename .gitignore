@@ -2,10 +2,11 @@
 node_modules/
 
 # Environment variables
-#.env
+.env
 .env.local
 .env.*.local
-#.env.test
+.env.test
+.env.production
 
 # Logs
 logs/
