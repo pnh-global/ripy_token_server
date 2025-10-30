@@ -22,10 +22,17 @@ function getSolanaConnection() {
 }
 
 /**
- * 회사 지갑 가져오기
+ * 회사 지갑 Keypair 생성
+ * @returns {Keypair} 회사 지갑 Keypair 객체
  */
 function getCompanyWallet() {
-    const secretKey = bs58.decode(process.env.SERVICE_WALLET_SECRET_KEY);
+    // ESM 모듈 호환성을 위한 bs58 decode
+    const decode = bs58.decode || (bs58.default && bs58.default.decode);
+    if (!decode) {
+        throw new Error('bs58 decode 함수를 찾을 수 없습니다');
+    }
+
+    const secretKey = decode(process.env.SERVICE_WALLET_SECRET_KEY);
     return Keypair.fromSecretKey(secretKey);
 }
 
