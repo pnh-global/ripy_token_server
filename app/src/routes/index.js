@@ -1,6 +1,7 @@
 import { Router } from "express";
 import healthRouter from "./health.routes.js";
 import sendRouter from "./send.routes.js";
+import solanaRouter from "./solana.routes.js";  // 추가
 
 const router = Router();
 
@@ -27,6 +28,7 @@ router.get("/health", async (req, res) => {
 
 // 다른 API 라우트
 router.use("/api/send", sendRouter);
+router.use("/api/solana", solanaRouter);  // 추가
 
 // 앞으로 여기에 /api/log, /api/sign 등 추가 예정
 
