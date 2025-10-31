@@ -1,6 +1,6 @@
 /**
  * ============================================
- * Solana 설정 파일
+ * Solana 설정 파일 (최종 완성 버전)
  * ============================================
  *
  * 역할:
@@ -10,11 +10,13 @@
  * - 설정값 검증
  *
  * 사용 예시:
- * import { SOLANA_CONFIG } from '../config/solana.config.js';
+ * import { SOLANA_CONFIG, connection } from '../config/solana.config.js';
  * console.log(SOLANA_CONFIG.RPC_URL);
+ * const blockhash = await connection.getLatestBlockhash();
  */
 
 import dotenv from 'dotenv';
+import { Connection, PublicKey } from '@solana/web3.js';
 
 // 환경변수 로드
 dotenv.config();
@@ -77,6 +79,9 @@ export const SOLANA_CONFIG = {
     // 실제 운영 시에는 NCLOUD Secret Manager에서 가져와야 함
     SERVICE_WALLET_SECRET_KEY: getEnvVariable('SERVICE_WALLET_SECRET_KEY'),
 
+    // 회사 지갑 공개키 주소
+    COMPANY_WALLET_ADDRESS: 'BLy5EXrh5BNVBuQTCS7XQAGnNfrdNpFuxsxTTgdVxqPh',
+
     // RIPY 토큰 민트 주소
     TOKEN_MINT_ADDRESS: getEnvVariable('TOKEN_MINT_ADDRESS'),
 
@@ -95,6 +100,53 @@ export const SOLANA_CONFIG = {
     // 재시도 간격 (밀리초)
     RETRY_DELAY: 1000, // 1초
 };
+
+/**
+ * ============================================
+ * Solana Connection 객체 생성
+ * ============================================
+ *
+ * Solana 블록체인과의 연결을 관리하는 Connection 객체
+ * 모든 RPC 호출에 사용됩니다.
+ *
+ * 사용 예시:
+ * import { connection } from '../config/solana.config.js';
+ * const balance = await connection.getBalance(publicKey);
+ */
+export const connection = new Connection(
+    SOLANA_CONFIG.RPC_URL,
+    {
+        commitment: SOLANA_CONFIG.COMMITMENT,
+        confirmTransactionInitialTimeout: SOLANA_CONFIG.TIMEOUT,
+    }
+);
+
+/**
+ * ============================================
+ * PublicKey 객체들
+ * ============================================
+ *
+ * 자주 사용되는 주소들을 PublicKey 객체로 미리 생성
+ * 매번 new PublicKey()를 호출하는 것보다 효율적입니다.
+ */
+
+/**
+ * 회사 지갑 공개키 객체
+ * 부분서명 시 Fee Payer로 사용됩니다.
+ */
+export const COMPANY_WALLET_PUBLIC_KEY = new PublicKey(
+    SOLANA_CONFIG.COMPANY_WALLET_ADDRESS
+);
+
+/**
+ * RIPY 토큰 민트 공개키 객체
+ * 토큰 전송 시 사용됩니다.
+ *
+ * 주의: TOKEN_MINT_ADDRESS가 설정되지 않으면 null
+ */
+export const TOKEN_MINT_PUBLIC_KEY = SOLANA_CONFIG.TOKEN_MINT_ADDRESS
+    ? new PublicKey(SOLANA_CONFIG.TOKEN_MINT_ADDRESS)
+    : null;
 
 /**
  * 설정값 검증 함수
@@ -116,6 +168,13 @@ export function validateSolanaConfig() {
         errors.push(`유효하지 않은 네트워크: ${SOLANA_CONFIG.NETWORK}. (허용: ${validNetworks.join(', ')})`);
     }
 
+    // 회사 지갑 주소 검증
+    try {
+        new PublicKey(SOLANA_CONFIG.COMPANY_WALLET_ADDRESS);
+    } catch (error) {
+        errors.push('COMPANY_WALLET_ADDRESS가 유효한 Solana 주소가 아닙니다.');
+    }
+
     // 운영 환경에서 필수 항목 검증
     if (process.env.NODE_ENV === 'production') {
         if (!SOLANA_CONFIG.SERVICE_WALLET_SECRET_KEY) {
@@ -128,6 +187,15 @@ export function validateSolanaConfig() {
 
         if (SOLANA_CONFIG.NETWORK !== 'mainnet-beta') {
             errors.push('운영 환경에서는 mainnet-beta를 사용해야 합니다.');
+        }
+    }
+
+    // TOKEN_MINT_ADDRESS 형식 검증 (설정된 경우)
+    if (SOLANA_CONFIG.TOKEN_MINT_ADDRESS) {
+        try {
+            new PublicKey(SOLANA_CONFIG.TOKEN_MINT_ADDRESS);
+        } catch (error) {
+            errors.push('TOKEN_MINT_ADDRESS가 유효한 Solana 주소가 아닙니다.');
         }
     }
 
@@ -152,10 +220,13 @@ export function logSolanaConfig() {
     console.log('========================================');
     console.log(`RPC URL: ${SOLANA_CONFIG.RPC_URL}`);
     console.log(`Network: ${SOLANA_CONFIG.NETWORK}`);
+    console.log(`Company Wallet: ${SOLANA_CONFIG.COMPANY_WALLET_ADDRESS}`);
     console.log(`Token Mint: ${SOLANA_CONFIG.TOKEN_MINT_ADDRESS || '(미설정)'}`);
     console.log(`Token Decimals: ${SOLANA_CONFIG.TOKEN_DECIMALS}`);
     console.log(`Commitment: ${SOLANA_CONFIG.COMMITMENT}`);
     console.log(`Timeout: ${SOLANA_CONFIG.TIMEOUT}ms`);
+    console.log(`Max Retries: ${SOLANA_CONFIG.MAX_RETRIES}`);
+    console.log(`Retry Delay: ${SOLANA_CONFIG.RETRY_DELAY}ms`);
 
     // 시크릿 키는 마스킹 처리
     if (SOLANA_CONFIG.SERVICE_WALLET_SECRET_KEY) {
@@ -167,6 +238,27 @@ export function logSolanaConfig() {
     }
 
     console.log('========================================\n');
+}
+
+/**
+ * Connection 연결 테스트 함수
+ * 서버 시작 시 RPC 연결이 정상적으로 작동하는지 확인
+ *
+ * @returns {Promise<boolean>} 연결 성공 여부
+ */
+export async function testSolanaConnection() {
+    try {
+        console.log('[Solana] RPC 연결 테스트 중...');
+
+        // 최신 blockhash 조회로 연결 테스트
+        const { blockhash } = await connection.getLatestBlockhash();
+
+        console.log(`[Solana] RPC 연결 성공! (blockhash: ${blockhash.substring(0, 8)}...)`);
+        return true;
+    } catch (error) {
+        console.error('[Solana] RPC 연결 실패:', error.message);
+        return false;
+    }
 }
 
 /**

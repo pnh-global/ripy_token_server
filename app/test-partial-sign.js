@@ -38,6 +38,9 @@ const requestData = {
     sender_wallet: 'BLy5EXrh5BNVBuQTCS7XQAGnNfrdNpFuxsxTTgdVxqPh',
     amount: 10.5
 };
+# Solana RPC 엔드포인트 (개발: Devnet, 운영: Mainnet)
+SOLANA_RPC_URL=https://api.devnet.solana.com
+SOLANA_NETWORK=devnet
 
 console.log('\n========================================');
 console.log('부분서명 API 테스트 데이터 생성');
