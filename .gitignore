@@ -6,7 +6,9 @@ node_modules/
 .env.local
 .env.*.local
 .env.test
+.env.backup
 .env.production
+*.env
 
 # Logs
 logs/
@@ -42,9 +44,17 @@ dist/
 build/
 
 # Database files
+backups/
 db/
 *.sql
 *.db
 
 # Docker volumes
 volumes/
+
+# Docker
+docker-compose.override.yml
+
+# SSL 인증서
+nginx/ssl/*.pem
+nginx/ssl/*.key

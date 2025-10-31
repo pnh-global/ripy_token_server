@@ -1,714 +1,599 @@
 /**
- * ============================================
- * Solana Controller (HTTP API 처리)
- * ============================================
+ * Solana Controller
  *
  * 역할:
- * - HTTP 요청 수신 및 파싱
- * - 요청 데이터 복호화 (웹서버 → 토큰서버)
- * - Service Layer 호출
- * - 응답 데이터 암호화 (토큰서버 → 웹서버)
- * - 에러 핸들링
+ * - HTTP 요청(req)과 응답(res)을 처리
+ * - 암호화된 요청 데이터를 복호화
+ * - 서비스 레이어(solana.service.js) 호출
+ * - 응답 데이터를 암호화하여 반환
+ * - 에러 핸들링 및 로그 기록
  *
- * 보안:
- * - Service Key 검증 (미들웨어에서 처리)
- * - 요청/응답 암호화
- * - 민감한 정보 로깅 방지
+ * 보안 처리:
+ * - 요청: 웹서버에서 보낸 암호화된 데이터를 service_key로 복호화
+ * - 응답: 결과 데이터를 service_key로 암호화하여 반환
  */
 
-import {
-    // 기존 서비스
-    createPartialSignedTransaction,
-    sendSignedTransaction,
-    bulkTransfer,
-    getTokenBalance,
-    getTransactionDetails,
-    getSolBalance,
+import crypto from 'crypto';
+import { Connection } from '@solana/web3.js';
+import { getClientIp } from '../utils/ipHelper.js';
+import { insertLog } from '../models/log.model.js';
+import * as solanaService from '../services/solana.service.js';
+import { decryptRequest, encryptResponse } from '../utils/crypto.util.js';
 
-    // 추가 서비스 (전자 서명 로드맵)
-    createUnsignedTransaction,
-    createAndPartialSignPayment,
-    createAndPartialSignReceive
-} from '../services/solana.service.js';
-import {
-    decryptRequest,
-    encryptResponse
-} from '../utils/crypto.util.js';
 
 /**
- * ============================================
- * 0. 미서명 트랜잭션 생성 API (신규 추가)
- * ============================================
- *
- * POST /api/solana/create-unsigned-transaction
- *
- * 요청 (암호화):
- * {
- *   "encrypted_data": "base64_encrypted_json",
- *   "service_key": "service_key_value"
- * }
- *
- * 복호화된 요청:
- * {
- *   "sender_public_key": "BLy5EXrh5BNVBuQTCS7XQAGnNfrdNpFuxsxTTgdVxqPh",
- *   "recipient_public_key": "RecipientWalletAddress...",
- *   "amount": 10.5
- * }
- *
- * 응답 (암호화):
- * {
- *   "encrypted_response": "base64_encrypted_json"
- * }
- *
- * 복호화된 응답:
- * {
- *   "success": true,
- *   "unsigned_transaction": "base64_serialized_transaction",
- *   "blockhash": "latest_blockhash",
- *   "last_valid_block_height": 123456,
- *   "message": "미서명 트랜잭션이 생성되었습니다."
- * }
+ * 공통 에러 응답 처리 함수
+ * @param {Object} res - Express response 객체
+ * @param {Error} error - 발생한 에러 객체
+ * @param {string} apiName - API 이름
+ * @param {Object} req - Express request 객체
  */
-export async function createUnsignedTransactionController(req, res) {
+const handleError = async (res, error, apiName, req) => {
+    // 에러 정보 추출
+    const errorCode = error.code || 'UNKNOWN_ERROR';
+    const errorMessage = error.message || 'An unknown error occurred';
+    const statusCode = error.statusCode || 500;
+
+    // 에러 로그 기록
     try {
-        // 1. 요청 데이터 추출
-        const { encrypted_data, service_key } = req.body;
-
-        if (!encrypted_data || !service_key) {
-            return res.status(400).json({
-                success: false,
-                error: 'BAD_REQUEST',
-                message: 'encrypted_data와 service_key는 필수입니다.'
-            });
-        }
-
-        // 2. 요청 데이터 복호화
-        let decryptedData;
-        try {
-            decryptedData = decryptRequest(encrypted_data, service_key);
-        } catch (error) {
-            return res.status(400).json({
-                success: false,
-                error: 'DECRYPTION_FAILED',
-                message: '요청 데이터 복호화에 실패했습니다.'
-            });
-        }
-
-        // 3. 필수 필드 검증
-        const { sender_public_key, recipient_public_key, amount } = decryptedData;
-
-        if (!sender_public_key || !recipient_public_key || !amount) {
-            return res.status(400).json({
-                success: false,
-                error: 'INVALID_REQUEST',
-                message: 'sender_public_key, recipient_public_key, amount는 필수입니다.'
-            });
-        }
-
-        // 4. Service Layer 호출
-        const result = await createUnsignedTransaction(
-            sender_public_key,
-            recipient_public_key,
-            amount
-        );
-
-        // 5. 응답 데이터 암호화
-        const encryptedResponse = encryptResponse(result, service_key);
-
-        // 6. 응답 반환
-        return res.status(200).json({
-            encrypted_response: encryptedResponse
+        await insertLog({
+            cate1: 'solana',
+            cate2: 'error',
+            request_id: req.requestId || crypto.randomUUID(),
+            service_key_id: req.serviceKeyId || null,
+            req_ip_text: getClientIp(req),
+            req_server: req.headers['x-server-name'] || 'unknown',
+            req_status: req.serviceKeyId ? 'Y' : 'N',
+            api_name: apiName,
+            api_parameter: null, // 보안상 에러 시 파라미터 저장 안함
+            result_code: statusCode.toString(),
+            latency_ms: req.startTime ? Date.now() - req.startTime : null,
+            error_code: errorCode,
+            error_message: errorMessage,
+            content: JSON.stringify({
+                error: errorCode,
+                message: errorMessage,
+                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            })
         });
-
-    } catch (error) {
-        console.error('미서명 트랜잭션 생성 오류:', error);
-        return res.status(500).json({
-            success: false,
-            error: 'INTERNAL_ERROR',
-            message: error.message || '서버 내부 오류가 발생했습니다.'
-        });
+    } catch (logError) {
+        console.error('Failed to log error:', logError);
     }
-}
+
+    // 클라이언트에게 에러 응답 (보안을 위해 최소한의 정보만 제공)
+    return res.status(statusCode).json({
+        success: false,
+        error: errorCode,
+        message: process.env.NODE_ENV === 'development' ? errorMessage : 'An error occurred'
+    });
+};
 
 /**
- * ============================================
- * 1. 부분서명 트랜잭션 생성 API (기존 - 유지)
- * ============================================
- *
- * POST /api/solana/partial-sign
- *
- * 요청 (암호화):
- * {
- *   "encrypted_data": "base64_encrypted_json",
- *   "service_key": "service_key_value"
- * }
- *
- * 복호화된 요청:
- * {
- *   "sender_wallet": "BLy5EXrh5BNVBuQTCS7XQAGnNfrdNpFuxsxTTgdVxqPh",
- *   "amount": 10.5
- * }
- *
- * 응답 (암호화):
- * {
- *   "encrypted_response": "base64_encrypted_json"
- * }
- *
- * 복호화된 응답:
- * {
- *   "success": true,
- *   "transaction_base64": "ABC123...",
- *   "blockhash": "xyz789...",
- *   ...
- * }
+ * 공통 성공 응답 처리 함수
+ * @param {Object} res - Express response 객체
+ * @param {Object} data - 응답 데이터
+ * @param {Object} req - Express request 객체
+ * @param {string} apiName - API 이름
+ * @param {string} resultCode - 결과 코드
  */
-export async function createPartialSignedTransactionController(req, res) {
+const handleSuccess = async (res, data, req, apiName, resultCode = '200') => {
     try {
-        // 1. 요청 데이터 추출
-        const { encrypted_data, service_key } = req.body;
+        // service_key로 응답 데이터 암호화
+        const serviceKey = req.serviceKey; // authMiddleware에서 설정됨
+        const encryptedResponse = encryptResponse(data, serviceKey);
 
-        if (!encrypted_data || !service_key) {
-            return res.status(400).json({
-                success: false,
-                error: 'BAD_REQUEST',
-                message: 'encrypted_data와 service_key는 필수입니다.'
-            });
-        }
+        // 성공 로그 기록
+        await insertLog({
+            cate1: 'solana',
+            cate2: 'success',
+            request_id: req.requestId || crypto.randomUUID(),
+            service_key_id: req.serviceKeyId || null,
+            req_ip_text: getClientIp(req),
+            req_server: req.headers['x-server-name'] || 'unknown',
+            req_status: 'Y',
+            api_name: apiName,
+            api_parameter: null, // 보안상 파라미터 저장 안함
+            result_code: resultCode,
+            latency_ms: req.startTime ? Date.now() - req.startTime : null,
+            error_code: null,
+            error_message: null,
+            content: JSON.stringify({
+                success: true,
+                timestamp: new Date().toISOString()
+            })
+        });
 
-        // 2. 요청 데이터 복호화
-        let decryptedData;
-        try {
-            decryptedData = decryptRequest(encrypted_data, service_key);
-        } catch (error) {
-            return res.status(400).json({
-                success: false,
-                error: 'DECRYPTION_FAILED',
-                message: '요청 데이터 복호화에 실패했습니다.'
-            });
-        }
-
-        // 3. 필수 필드 검증
-        const { sender_wallet, amount } = decryptedData;
-
-        if (!sender_wallet || !amount) {
-            return res.status(400).json({
-                success: false,
-                error: 'INVALID_REQUEST',
-                message: 'sender_wallet과 amount는 필수입니다.'
-            });
-        }
-
-        // 4. Service Layer 호출
-        const result = await createPartialSignedTransaction(sender_wallet, amount);
-
-        // 5. 응답 데이터 암호화
-        const encryptedResponse = encryptResponse(result, service_key);
-
-        // 6. 응답 반환
+        // 암호화된 응답 반환
         return res.status(200).json({
-            encrypted_response: encryptedResponse
+            success: true,
+            encrypted_data: encryptedResponse
         });
-
     } catch (error) {
-        console.error('부분서명 트랜잭션 생성 오류:', error);
-        return res.status(500).json({
-            success: false,
-            error: 'INTERNAL_ERROR',
-            message: error.message || '서버 내부 오류가 발생했습니다.'
-        });
+        console.error('Failed to handle success response:', error);
+        return handleError(res, error, apiName, req);
     }
-}
-
+};
 /**
- * ============================================
- * 1-1. 부분서명 생성 - 사용자 → 회사 (신규 추가)
- * ============================================
+ * [POST] /api/solana/create-unsigned-transaction
+ * 미서명 트랜잭션 생성
  *
- * POST /api/solana/create-and-partial-sign
- *
- * 요청 (암호화):
+ * 요청 데이터 (암호화됨):
  * {
- *   "encrypted_data": "base64_encrypted_json",
- *   "service_key": "service_key_value"
+ *   sender: string,           // 발신자 지갑 주소
+ *   recipient: string,        // 수신자 지갑 주소
+ *   amount: number,           // 전송할 토큰 양
+ *   request_id: string        // UUID 형식의 요청 ID
  * }
  *
- * 복호화된 요청:
+ * 응답 데이터 (암호화됨):
  * {
- *   "sender_public_key": "UserWalletAddress",
- *   "amount": 50.25,
- *   "request_id": "uuid-v4"
- * }
- *
- * 응답 (암호화):
- * {
- *   "encrypted_response": "base64_encrypted_json"
- * }
- *
- * 복호화된 응답:
- * {
- *   "success": true,
- *   "partial_signed_transaction": "base64_partial_signed_transaction",
- *   "blockhash": "latest_blockhash",
- *   "last_valid_block_height": 123456,
- *   "message": "부분서명된 트랜잭션이 생성되었습니다."
+ *   unsigned_transaction: string,  // Base64 인코딩된 미서명 트랜잭션
+ *   request_id: string,            // 요청 ID
+ *   blockhash: string              // 최신 blockhash
  * }
  */
-export async function createAndPartialSignPaymentController(req, res) {
+export const createUnsignedTransaction = async (req, res) => {
+    const apiName = 'solana/create-unsigned-transaction';
+    req.startTime = Date.now();
+
     try {
-        // 1. 요청 데이터 추출
-        const { encrypted_data, service_key } = req.body;
+        // 1. 암호화된 요청 데이터 복호화
+        const serviceKey = req.serviceKey;
+        const encryptedData = req.body.encrypted_data;
 
-        if (!encrypted_data || !service_key) {
-            return res.status(400).json({
-                success: false,
-                error: 'BAD_REQUEST',
-                message: 'encrypted_data와 service_key는 필수입니다.'
-            });
+        if (!encryptedData) {
+            throw {
+                code: 'MISSING_ENCRYPTED_DATA',
+                message: 'encrypted_data is required',
+                statusCode: 400
+            };
         }
 
-        // 2. 요청 데이터 복호화
-        let decryptedData;
-        try {
-            decryptedData = decryptRequest(encrypted_data, service_key);
-        } catch (error) {
-            return res.status(400).json({
-                success: false,
-                error: 'DECRYPTION_FAILED',
-                message: '요청 데이터 복호화에 실패했습니다.'
-            });
+        const decryptedData = decryptRequest(encryptedData, serviceKey);
+        const { sender, recipient, amount, request_id } = decryptedData;
+
+        // 2. 입력 검증
+        if (!sender || !recipient || !amount || !request_id) {
+            throw {
+                code: 'INVALID_PARAMETERS',
+                message: 'sender, recipient, amount, and request_id are required',
+                statusCode: 400
+            };
         }
 
-        // 3. 필수 필드 검증
-        const { sender_public_key, amount, request_id } = decryptedData;
+        // request_id를 req 객체에 저장 (로깅용)
+        req.requestId = request_id;
 
-        if (!sender_public_key || !amount || !request_id) {
-            return res.status(400).json({
-                success: false,
-                error: 'INVALID_REQUEST',
-                message: 'sender_public_key, amount, request_id는 필수입니다.'
-            });
-        }
-
-        // 4. Service Layer 호출
-        const result = await createAndPartialSignPayment(
-            sender_public_key,
+        // 3. 서비스 레이어 호출
+        const result = await solanaService.createUnsignedTransaction({
+            sender,
+            recipient,
             amount,
             request_id
-        );
-
-        // 5. 응답 데이터 암호화
-        const encryptedResponse = encryptResponse(result, service_key);
-
-        // 6. 응답 반환
-        return res.status(200).json({
-            encrypted_response: encryptedResponse
         });
+
+        // 4. 성공 응답 반환 (암호화됨)
+        return handleSuccess(res, result, req, apiName);
 
     } catch (error) {
-        console.error('부분서명 생성 오류 (사용자→회사):', error);
-        return res.status(500).json({
-            success: false,
-            error: 'INTERNAL_ERROR',
-            message: error.message || '서버 내부 오류가 발생했습니다.'
-        });
+        console.error(`${apiName} error:`, error);
+        return handleError(res, error, apiName, req);
     }
-}
+};
 
 /**
- * ============================================
- * 1-2. 부분서명 생성 - 사용자 → 사용자 (신규 추가)
- * ============================================
+ * [POST] /api/solana/create-and-partial-sign
+ * 부분서명 생성 - 사용자 → 회사 (Fee Payer는 회사)
  *
- * POST /api/solana/create-and-partial-sign-receive
- *
- * 요청 (암호화):
+ * 요청 데이터 (암호화됨):
  * {
- *   "encrypted_data": "base64_encrypted_json",
- *   "service_key": "service_key_value"
+ *   sender: string,           // 발신자(사용자) 지갑 주소
+ *   amount: number,           // 전송할 토큰 양
+ *   request_id: string,       // UUID 형식의 요청 ID
+ *   cate1: string,            // 분류1 (예: 'payment')
+ *   cate2: string             // 분류2 (예: 'user_to_company')
  * }
  *
- * 복호화된 요청:
+ * 응답 데이터 (암호화됨):
  * {
- *   "sender_public_key": "UserWalletAddress1",
- *   "recipient_public_key": "UserWalletAddress2",
- *   "amount": 25.5,
- *   "request_id": "uuid-v4"
- * }
- *
- * 응답 (암호화):
- * {
- *   "encrypted_response": "base64_encrypted_json"
- * }
- *
- * 복호화된 응답:
- * {
- *   "success": true,
- *   "partial_signed_transaction": "base64_partial_signed_transaction",
- *   "blockhash": "latest_blockhash",
- *   "last_valid_block_height": 123456,
- *   "message": "부분서명된 트랜잭션이 생성되었습니다."
+ *   partial_signed_transaction: string,  // Base64 인코딩된 부분서명 트랜잭션
+ *   request_id: string,                  // 요청 ID
+ *   contract_idx: number,                // 계약서 테이블 인덱스
+ *   blockhash: string                    // 최신 blockhash
  * }
  */
-export async function createAndPartialSignReceiveController(req, res) {
+export const createAndPartialSignPayment = async (req, res) => {
+    const apiName = 'solana/create-and-partial-sign';
+    req.startTime = Date.now();
+
     try {
-        // 1. 요청 데이터 추출
-        const { encrypted_data, service_key } = req.body;
+        // 1. 암호화된 요청 데이터 복호화
+        const serviceKey = req.serviceKey;
+        const encryptedData = req.body.encrypted_data;
 
-        if (!encrypted_data || !service_key) {
-            return res.status(400).json({
-                success: false,
-                error: 'BAD_REQUEST',
-                message: 'encrypted_data와 service_key는 필수입니다.'
-            });
+        if (!encryptedData) {
+            throw {
+                code: 'MISSING_ENCRYPTED_DATA',
+                message: 'encrypted_data is required',
+                statusCode: 400
+            };
         }
 
-        // 2. 요청 데이터 복호화
-        let decryptedData;
-        try {
-            decryptedData = decryptRequest(encrypted_data, service_key);
-        } catch (error) {
-            return res.status(400).json({
-                success: false,
-                error: 'DECRYPTION_FAILED',
-                message: '요청 데이터 복호화에 실패했습니다.'
-            });
+        const decryptedData = decryptRequest(encryptedData, serviceKey);
+        const { sender, amount, request_id, cate1, cate2 } = decryptedData;
+
+        // 2. 입력 검증
+        if (!sender || !amount || !request_id) {
+            throw {
+                code: 'INVALID_PARAMETERS',
+                message: 'sender, amount, and request_id are required',
+                statusCode: 400
+            };
         }
 
-        // 3. 필수 필드 검증
-        const { sender_public_key, recipient_public_key, amount, request_id } = decryptedData;
+        // request_id를 req 객체에 저장 (로깅용)
+        req.requestId = request_id;
 
-        if (!sender_public_key || !recipient_public_key || !amount || !request_id) {
-            return res.status(400).json({
-                success: false,
-                error: 'INVALID_REQUEST',
-                message: 'sender_public_key, recipient_public_key, amount, request_id는 필수입니다.'
-            });
-        }
-
-        // 4. Service Layer 호출
-        const result = await createAndPartialSignReceive(
-            sender_public_key,
-            recipient_public_key,
+        // 3. 서비스 레이어 호출
+        const result = await solanaService.createAndPartialSignPayment({
+            sender,
             amount,
-            request_id
-        );
-
-        // 5. 응답 데이터 암호화
-        const encryptedResponse = encryptResponse(result, service_key);
-
-        // 6. 응답 반환
-        return res.status(200).json({
-            encrypted_response: encryptedResponse
+            request_id,
+            cate1: cate1 || 'payment',
+            cate2: cate2 || 'user_to_company'
         });
+
+        // 4. 성공 응답 반환 (암호화됨)
+        return handleSuccess(res, result, req, apiName);
 
     } catch (error) {
-        console.error('부분서명 생성 오류 (사용자→사용자):', error);
-        return res.status(500).json({
-            success: false,
-            error: 'INTERNAL_ERROR',
-            message: error.message || '서버 내부 오류가 발생했습니다.'
-        });
+        console.error(`${apiName} error:`, error);
+        return handleError(res, error, apiName, req);
     }
-}
+};
 
 /**
- * ============================================
- * 2. 완전 서명된 트랜잭션 전송 API (기존 - 유지)
- * ============================================
+ * [POST] /api/solana/create-and-partial-sign-receive
+ * 부분서명 생성 - 사용자 → 사용자 (Fee Payer는 회사)
  *
- * POST /api/solana/send-signed
- *
- * 요청 (암호화):
+ * 요청 데이터 (암호화됨):
  * {
- *   "encrypted_data": "base64_encrypted_json",
- *   "service_key": "service_key_value"
+ *   sender: string,           // 발신자(사용자) 지갑 주소
+ *   recipient: string,        // 수신자(사용자) 지갑 주소
+ *   amount: number,           // 전송할 토큰 양
+ *   request_id: string,       // UUID 형식의 요청 ID
+ *   cate1: string,            // 분류1 (예: 'payment')
+ *   cate2: string             // 분류2 (예: 'user_to_user')
  * }
  *
- * 복호화된 요청:
+ * 응답 데이터 (암호화됨):
  * {
- *   "signed_transaction_base64": "ABC123..."
+ *   partial_signed_transaction: string,  // Base64 인코딩된 부분서명 트랜잭션
+ *   request_id: string,                  // 요청 ID
+ *   contract_idx: number,                // 계약서 테이블 인덱스
+ *   blockhash: string                    // 최신 blockhash
  * }
  */
-export async function sendSignedTransactionController(req, res) {
+export const createAndPartialSignReceive = async (req, res) => {
+    const apiName = 'solana/create-and-partial-sign-receive';
+    req.startTime = Date.now();
+
     try {
-        // 1. 요청 데이터 추출
-        const { encrypted_data, service_key } = req.body;
+        // 1. 암호화된 요청 데이터 복호화
+        const serviceKey = req.serviceKey;
+        const encryptedData = req.body.encrypted_data;
 
-        if (!encrypted_data || !service_key) {
-            return res.status(400).json({
-                success: false,
-                error: 'BAD_REQUEST',
-                message: 'encrypted_data와 service_key는 필수입니다.'
-            });
+        if (!encryptedData) {
+            throw {
+                code: 'MISSING_ENCRYPTED_DATA',
+                message: 'encrypted_data is required',
+                statusCode: 400
+            };
         }
 
-        // 2. 요청 데이터 복호화
-        let decryptedData;
-        try {
-            decryptedData = decryptRequest(encrypted_data, service_key);
-        } catch (error) {
-            return res.status(400).json({
-                success: false,
-                error: 'DECRYPTION_FAILED',
-                message: '요청 데이터 복호화에 실패했습니다.'
-            });
+        const decryptedData = decryptRequest(encryptedData, serviceKey);
+        const { sender, recipient, amount, request_id, cate1, cate2 } = decryptedData;
+
+        // 2. 입력 검증
+        if (!sender || !recipient || !amount || !request_id) {
+            throw {
+                code: 'INVALID_PARAMETERS',
+                message: 'sender, recipient, amount, and request_id are required',
+                statusCode: 400
+            };
         }
 
-        // 3. 필수 필드 검증
-        // signed_transaction_base64 또는 signed_transaction 둘 다 지원
-        const { signed_transaction_base64, signed_transaction } = decryptedData;
-        const transactionBase64 = signed_transaction_base64 || signed_transaction;
+        // request_id를 req 객체에 저장 (로깅용)
+        req.requestId = request_id;
 
-        if (!transactionBase64) {
-            return res.status(400).json({
-                success: false,
-                error: 'INVALID_REQUEST',
-                message: 'signed_transaction_base64 또는 signed_transaction은 필수입니다.'
-            });
-        }
-
-        // 4. Service Layer 호출
-        const result = await sendSignedTransaction(transactionBase64);
-
-        // 5. 응답 데이터 암호화
-        const encryptedResponse = encryptResponse(result, service_key);
-
-        // 6. 응답 반환
-        return res.status(200).json({
-            encrypted_response: encryptedResponse
+        // 3. 서비스 레이어 호출
+        const result = await solanaService.createAndPartialSignReceive({
+            sender,
+            recipient,
+            amount,
+            request_id,
+            cate1: cate1 || 'payment',
+            cate2: cate2 || 'user_to_user'
         });
+
+        // 4. 성공 응답 반환 (암호화됨)
+        return handleSuccess(res, result, req, apiName);
 
     } catch (error) {
-        console.error('트랜잭션 전송 오류:', error);
-        return res.status(500).json({
-            success: false,
-            error: 'INTERNAL_ERROR',
-            message: error.message || '서버 내부 오류가 발생했습니다.'
-        });
+        console.error(`${apiName} error:`, error);
+        return handleError(res, error, apiName, req);
     }
-}
-
+};
 /**
- * ============================================
- * 3. 회사 → 다중 수신자 일괄 전송 API (기존 - 유지)
- * ============================================
+ * [POST] /api/solana/send-signed-transaction
+ * 최종 서명된 트랜잭션 전송
  *
- * POST /api/solana/bulk-transfer
- *
- * 요청 (암호화):
+ * 요청 데이터 (암호화됨):
  * {
- *   "encrypted_data": "base64_encrypted_json",
- *   "service_key": "service_key_value"
+ *   signed_transaction: string,  // Base64 인코딩된 최종 서명 트랜잭션
+ *   request_id: string,          // UUID 형식의 요청 ID
+ *   contract_idx: number         // 계약서 테이블 인덱스 (선택)
  * }
  *
- * 복호화된 요청:
+ * 응답 데이터 (암호화됨):
  * {
- *   "recipients": [
- *     { "wallet_address": "ABC...", "amount": 10 },
- *     { "wallet_address": "DEF...", "amount": 20 }
- *   ]
+ *   signature: string,           // 트랜잭션 서명(해시)
+ *   request_id: string,          // 요청 ID
+ *   status: string               // 'success' 또는 'pending'
  * }
  */
-export async function bulkTransferController(req, res) {
+export const sendSignedTransaction = async (req, res) => {
+    const apiName = 'solana/send-signed-transaction';
+    req.startTime = Date.now();
+
     try {
-        // 1. 요청 데이터 추출
-        const { encrypted_data, service_key } = req.body;
+        // 1. 암호화된 요청 데이터 복호화
+        const serviceKey = req.serviceKey;
+        const encryptedData = req.body.encrypted_data;
 
-        if (!encrypted_data || !service_key) {
-            return res.status(400).json({
-                success: false,
-                error: 'BAD_REQUEST',
-                message: 'encrypted_data와 service_key는 필수입니다.'
-            });
+        if (!encryptedData) {
+            throw {
+                code: 'MISSING_ENCRYPTED_DATA',
+                message: 'encrypted_data is required',
+                statusCode: 400
+            };
         }
 
-        // 2. 요청 데이터 복호화
-        let decryptedData;
-        try {
-            decryptedData = decryptRequest(encrypted_data, service_key);
-        } catch (error) {
-            return res.status(400).json({
-                success: false,
-                error: 'DECRYPTION_FAILED',
-                message: '요청 데이터 복호화에 실패했습니다.'
-            });
+        const decryptedData = decryptRequest(encryptedData, serviceKey);
+        const { signed_transaction, request_id, contract_idx } = decryptedData;
+
+        // 2. 입력 검증
+        if (!signed_transaction || !request_id) {
+            throw {
+                code: 'INVALID_PARAMETERS',
+                message: 'signed_transaction and request_id are required',
+                statusCode: 400
+            };
         }
 
-        // 3. 필수 필드 검증
-        const { recipients } = decryptedData;
+        // request_id를 req 객체에 저장 (로깅용)
+        req.requestId = request_id;
 
-        if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'INVALID_REQUEST',
-                message: 'recipients는 필수 배열입니다.'
-            });
-        }
-
-        // 4. Service Layer 호출
-        const result = await bulkTransfer(decryptedData.recipients);
-
-        // 5. 응답 데이터 암호화
-        const encryptedResponse = encryptResponse(result, service_key);
-
-        // 6. 응답 반환
-        return res.status(200).json({
-            encrypted_response: encryptedResponse
+        // 3. 서비스 레이어 호출
+        const result = await solanaService.sendSignedTransaction({
+            signed_transaction,
+            request_id,
+            contract_idx
         });
+
+        // 4. 성공 응답 반환 (암호화됨)
+        return handleSuccess(res, result, req, apiName);
 
     } catch (error) {
-        console.error('일괄 전송 오류:', error);
-        return res.status(500).json({
-            success: false,
-            error: 'INTERNAL_ERROR',
-            message: error.message || '서버 내부 오류가 발생했습니다.'
-        });
+        console.error(`${apiName} error:`, error);
+        return handleError(res, error, apiName, req);
     }
-}
+};
 
 /**
- * ============================================
- * 4. 토큰 잔액 조회 API (기존 - 유지)
- * ============================================
+ * [GET] /api/solana/transaction/:signature
+ * 트랜잭션 상태 조회
  *
- * GET /api/solana/balance/:wallet_address
+ * URL 파라미터:
+ * - signature: 트랜잭션 서명(해시)
  *
- * 응답 (암호화하지 않음 - 공개 정보):
+ * 응답 데이터 (암호화됨):
  * {
- *   "success": true,
- *   "amount": 100.5,
- *   ...
+ *   signature: string,           // 트랜잭션 서명
+ *   status: string,              // 'confirmed', 'finalized', 'pending', 'failed'
+ *   slot: number,                // 블록 슬롯 번호
+ *   blockTime: number,           // 블록 타임스탬프
+ *   confirmations: number,       // 확인 수
+ *   err: object|null            // 에러 정보 (실패 시)
  * }
  */
-export async function getTokenBalanceController(req, res) {
+export const getTransactionStatus = async (req, res) => {
+    const apiName = 'solana/transaction-status';
+    req.startTime = Date.now();
+
     try {
-        // 1. 지갑 주소 추출
-        const { wallet_address } = req.params;
-
-        if (!wallet_address) {
-            return res.status(400).json({
-                success: false,
-                error: 'BAD_REQUEST',
-                message: 'wallet_address는 필수입니다.'
-            });
-        }
-
-        // 2. Service Layer 호출
-        const result = await getTokenBalance(wallet_address);
-
-        // 3. 응답 반환 (잔액은 공개 정보이므로 암호화 안 함)
-        return res.status(200).json(result);
-
-    } catch (error) {
-        console.error('잔액 조회 오류:', error);
-        return res.status(500).json({
-            success: false,
-            error: 'INTERNAL_ERROR',
-            message: error.message || '서버 내부 오류가 발생했습니다.'
-        });
-    }
-}
-
-/**
- * ============================================
- * 5. 트랜잭션 상세 정보 조회 API (기존 - 유지)
- * ============================================
- *
- * GET /api/solana/transaction/:signature
- *
- * 응답 (암호화하지 않음 - 공개 정보):
- * {
- *   "success": true,
- *   "status": "SUCCESS",
- *   ...
- * }
- */
-export async function getTransactionDetailsController(req, res) {
-    try {
-        // 1. 트랜잭션 서명 추출
+        // 1. URL 파라미터에서 signature 추출
         const { signature } = req.params;
 
         if (!signature) {
-            return res.status(400).json({
-                success: false,
-                error: 'BAD_REQUEST',
-                message: 'signature는 필수입니다.'
-            });
+            throw {
+                code: 'MISSING_SIGNATURE',
+                message: 'Transaction signature is required',
+                statusCode: 400
+            };
         }
 
-        // 2. Service Layer 호출
-        const result = await getTransactionDetails(signature);
+        // 2. 서비스 레이어 호출
+        const result = await solanaService.getTransactionStatus(signature);
 
-        // 3. 응답 반환
-        return res.status(200).json(result);
+        // 3. 성공 응답 반환 (암호화됨)
+        return handleSuccess(res, result, req, apiName);
 
     } catch (error) {
-        console.error('트랜잭션 조회 오류:', error);
-        return res.status(500).json({
-            success: false,
-            error: 'INTERNAL_ERROR',
-            message: error.message || '서버 내부 오류가 발생했습니다.'
-        });
+        console.error(`${apiName} error:`, error);
+        return handleError(res, error, apiName, req);
     }
-}
+};
 
 /**
- * ============================================
- * 6. SOL 잔액 조회 API (기존 - 유지)
- * ============================================
+ * [POST] /api/solana/verify-transaction
+ * 트랜잭션 검증 (선택적 기능)
  *
- * GET /api/solana/sol-balance/:wallet_address
- *
- * 응답 (암호화하지 않음 - 공개 정보):
+ * 요청 데이터 (암호화됨):
  * {
- *   "success": true,
- *   "sol": 1.5,
- *   ...
+ *   signature: string,           // 검증할 트랜잭션 서명
+ *   expected_amount: number,     // 예상 전송 금액
+ *   expected_recipient: string   // 예상 수신자 주소
+ * }
+ *
+ * 응답 데이터 (암호화됨):
+ * {
+ *   is_valid: boolean,           // 검증 결과
+ *   actual_amount: number,       // 실제 전송 금액
+ *   actual_recipient: string,    // 실제 수신자 주소
+ *   status: string               // 트랜잭션 상태
  * }
  */
-export async function getSolBalanceController(req, res) {
-    try {
-        // 1. 지갑 주소 추출
-        const { wallet_address } = req.params;
+export const verifyTransaction = async (req, res) => {
+    const apiName = 'solana/verify-transaction';
+    req.startTime = Date.now();
 
-        if (!wallet_address) {
-            return res.status(400).json({
-                success: false,
-                error: 'BAD_REQUEST',
-                message: 'wallet_address는 필수입니다.'
-            });
+    try {
+        // 1. 암호화된 요청 데이터 복호화
+        const serviceKey = req.serviceKey;
+        const encryptedData = req.body.encrypted_data;
+
+        if (!encryptedData) {
+            throw {
+                code: 'MISSING_ENCRYPTED_DATA',
+                message: 'encrypted_data is required',
+                statusCode: 400
+            };
         }
 
-        // 2. Service Layer 호출
-        const result = await getSolBalance(wallet_address);
+        const decryptedData = decryptRequest(encryptedData, serviceKey);
+        const { signature, expected_amount, expected_recipient } = decryptedData;
 
-        // 3. 응답 반환
-        return res.status(200).json(result);
+        // 2. 입력 검증
+        if (!signature) {
+            throw {
+                code: 'INVALID_PARAMETERS',
+                message: 'signature is required',
+                statusCode: 400
+            };
+        }
+
+        // 3. 서비스 레이어 호출
+        const result = await solanaService.verifyTransaction({
+            signature,
+            expected_amount,
+            expected_recipient
+        });
+
+        // 4. 성공 응답 반환 (암호화됨)
+        return handleSuccess(res, result, req, apiName);
 
     } catch (error) {
-        console.error('SOL 잔액 조회 오류:', error);
-        return res.status(500).json({
-            success: false,
-            error: 'INTERNAL_ERROR',
-            message: error.message || '서버 내부 오류가 발생했습니다.'
-        });
+        console.error(`${apiName} error:`, error);
+        return handleError(res, error, apiName, req);
     }
-}
+};
 
 /**
- * 기본 export
+ * [GET] /api/solana/balance/:address
+ * 지갑 잔액 조회
+ *
+ * URL 파라미터:
+ * - address: 조회할 지갑 주소
+ *
+ * 응답 데이터 (암호화됨):
+ * {
+ *   address: string,             // 지갑 주소
+ *   sol_balance: number,         // SOL 잔액
+ *   token_balance: number,       // RIPY 토큰 잔액
+ *   ata_address: string          // Associated Token Account 주소
+ * }
  */
-export default {
-    // 신규 추가 (전자 서명 로드맵)
-    createUnsignedTransactionController,
-    createAndPartialSignPaymentController,
-    createAndPartialSignReceiveController,
+export const getWalletBalance = async (req, res) => {
+    const apiName = 'solana/balance';
+    req.startTime = Date.now();
 
-    // 기존 컨트롤러
-    createPartialSignedTransactionController,
-    sendSignedTransactionController,
-    bulkTransferController,
-    getTokenBalanceController,
-    getTransactionDetailsController,
-    getSolBalanceController
+    try {
+        // 1. URL 파라미터에서 address 추출
+        const { address } = req.params;
+
+        if (!address) {
+            throw {
+                code: 'MISSING_ADDRESS',
+                message: 'Wallet address is required',
+                statusCode: 400
+            };
+        }
+
+        // 2. 서비스 레이어 호출
+        const result = await solanaService.getWalletBalance(address);
+
+        // 3. 성공 응답 반환 (암호화됨)
+        return handleSuccess(res, result, req, apiName);
+
+    } catch (error) {
+        console.error(`${apiName} error:`, error);
+        return handleError(res, error, apiName, req);
+    }
+};
+
+/**
+ * * [GET] /api/solana/health
+ *  * Solana RPC 연결 상태 확인
+ *  *
+ *  * 응답 데이터:
+ *  * {
+ *  *   status: string,              // 'healthy' 또는 'unhealthy'
+ *  *   rpc_url: string,             // 현재 RPC URL
+ *  *   network: string,             // 네트워크 (devnet/mainnet)
+ *  *   version: object,             // Solana 버전
+ *  *   current_slot: number,        // 현재 슬롯
+ *  *   block_height: number         // 블록 높이
+ *  * }
+ */
+export const healthCheck = async (req, res) => {
+    const apiName = 'solana/health';
+    req.startTime = Date.now();
+
+    try {
+        // Connection 직접 생성
+        const connection = new Connection(
+            process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com',
+            'confirmed'
+        );
+
+        // RPC 버전 확인
+        const version = await connection.getVersion();
+
+        // 현재 슬롯 확인
+        const slot = await connection.getSlot();
+
+        // 블록 높이 확인
+        const blockHeight = await connection.getBlockHeight();
+
+        // 일반 응답 (암호화 안함 - health check는 공개 API)
+        return res.status(200).json({
+            success: true,
+            status: 'healthy',
+            rpc_url: process.env.SOLANA_RPC_URL,
+            network: process.env.SOLANA_NETWORK,
+            version: version,
+            current_slot: slot,
+            block_height: blockHeight,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error(`${apiName} error:`, error);
+        return res.status(503).json({
+            success: false,
+            status: 'unhealthy',
+            error: error.message
+        });
+    }
 };
