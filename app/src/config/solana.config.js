@@ -21,6 +21,11 @@ import { Connection, PublicKey } from '@solana/web3.js';
 // 환경변수 로드
 dotenv.config();
 
+// 디버깅: 환경변수 확인
+console.log('[DEBUG] SOLANA_RPC_URL:', process.env.SOLANA_RPC_URL);
+console.log('[DEBUG] SOLANA_NETWORK:', process.env.SOLANA_NETWORK);
+console.log('[DEBUG] Current Directory:', process.cwd());
+
 /**
  * 필수 환경변수 검증 함수
  * 운영 환경에서 누락된 환경변수가 있으면 에러 발생

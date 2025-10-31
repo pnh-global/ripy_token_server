@@ -1,6 +1,6 @@
 /**
  * ============================================
- * Solana 유틸리티 함수
+ * Solana 유틸리티 함수 (개선 버전)
  * ============================================
  *
  * 역할:
@@ -16,8 +16,7 @@
 import {
     Connection,
     Keypair,
-    PublicKey,
-    Transaction
+    PublicKey
 } from '@solana/web3.js';
 import {
     getAssociatedTokenAddress,
@@ -65,7 +64,7 @@ export function createConnection() {
 
 /**
  * ============================================
- * 2. 회사 지갑 키페어 로드
+ * 2. 회사 지갑 키페어 로드 (보안 강화 버전)
  * ============================================
  *
  * Base58로 인코딩된 시크릿 키를 디코딩하여 Keypair 객체 생성
@@ -92,17 +91,37 @@ export function loadCompanyWallet(secretKeyBase58 = null) {
             throw new Error('회사 지갑 시크릿 키가 설정되지 않았습니다. (SERVICE_WALLET_SECRET_KEY)');
         }
 
+        // 보안: 시크릿 키 최소 길이 검증
+        if (secretKey.length < 32) {
+            throw new Error('유효하지 않은 시크릿 키 형식입니다.');
+        }
+
         // Base58 디코딩하여 Uint8Array로 변환
         const secretKeyBytes = bs58.decode(secretKey);
+
+        // 보안: 디코딩된 바이트 길이 검증 (Solana 키는 64바이트)
+        if (secretKeyBytes.length !== 64) {
+            throw new Error(`유효하지 않은 시크릿 키 길이입니다. (실제: ${secretKeyBytes.length}바이트, 예상: 64바이트)`);
+        }
 
         // Keypair 생성
         const keypair = Keypair.fromSecretKey(secretKeyBytes);
 
+        // 보안: 로그에는 공개키만 출력
+        console.log('[Security] 회사 지갑 로드 성공:', keypair.publicKey.toBase58());
+
         return keypair;
 
     } catch (error) {
-        console.error('회사 지갑 로드 실패:', error);
-        throw new Error(`회사 지갑 로드 실패: ${error.message}`);
+        // 보안: 에러 메시지에 시크릿 키 포함 방지
+        console.error('[Security] 회사 지갑 로드 실패 (시크릿 키 정보 숨김)');
+
+        // 개발 환경에서는 상세 에러, 운영 환경에서는 간략한 에러
+        if (process.env.NODE_ENV === 'development') {
+            throw new Error(`회사 지갑 로드 실패: ${error.message}`);
+        } else {
+            throw new Error('회사 지갑 로드 실패: 시크릿 키를 확인하세요.');
+        }
     }
 }
 
@@ -249,7 +268,7 @@ export async function getLatestBlockhash(connection) {
  */
 
 /**
- * ATA 존재 여부 확인
+ * ATA 존재 여부 확인 (개선 버전)
  *
  * @param {Connection} connection - Solana Connection 객체
  * @param {PublicKey} ataAddress - 확인할 ATA 주소
@@ -266,8 +285,18 @@ export async function checkATAExists(connection, ataAddress) {
         const accountInfo = await connection.getAccountInfo(ataAddress);
         return accountInfo !== null;
     } catch (error) {
-        console.error('ATA 존재 여부 확인 실패:', error);
-        return false;
+        // 네트워크 에러 vs 계정 없음을 구분
+        const errorMessage = error.message || '';
+
+        if (errorMessage.includes('could not find account') ||
+            errorMessage.includes('Invalid param')) {
+            // 계정이 존재하지 않음 (정상)
+            return false;
+        }
+
+        // 다른 에러는 throw (네트워크 문제 등)
+        console.error('ATA 존재 여부 확인 중 에러:', error);
+        throw new Error(`ATA 확인 실패: ${error.message}`);
     }
 }
 
@@ -284,6 +313,11 @@ export async function checkATAExists(connection, ataAddress) {
  */
 export function isValidSolanaAddress(address) {
     try {
+        // 빈 문자열 체크
+        if (!address || typeof address !== 'string') {
+            return false;
+        }
+
         // PublicKey 생성 시도
         new PublicKey(address);
         return true;
