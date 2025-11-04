@@ -2,6 +2,14 @@
  * Swagger 설정 파일
  * API 문서 자동 생성을 위한 swagger-jsdoc 설정
  */
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ES 모듈에서 __dirname 사용하기
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const swaggerOptions = {
     definition: {
@@ -90,7 +98,51 @@ RIPY 토큰 서버 API 문서입니다.
     },
     // JSDoc 주석을 읽을 파일 경로
     apis: [
-        './src/routes/*.js',
-        './src/controllers/*.js'
+        path.join(__dirname, '../routes/**/*.js'),        // config -> routes
+        path.join(__dirname, '../controllers/**/*.js')     // config -> controllers
     ]
 };
+
+/**
+ * Swagger 설정 함수
+ * Express 앱에 Swagger UI를 추가합니다.
+ *
+ * @param {Object} app - Express 앱 인스턴스
+ */
+export function setupSwagger(app) {
+    try {
+        // Swagger 문서 생성
+        const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
+        console.log('📄 Swagger 문서 생성 완료');
+        console.log(`   - API 개수: ${Object.keys(swaggerSpec.paths || {}).length}`);
+
+        // Swagger UI 설정
+        const swaggerUiOptions = {
+            explorer: true,
+            swaggerOptions: {
+                persistAuthorization: true, // API Key 입력 후 새로고침해도 유지
+                displayRequestDuration: true, // 요청 시간 표시
+                filter: true, // 검색 기능 활성화
+                syntaxHighlight: {
+                    activate: true,
+                    theme: 'monokai'
+                }
+            }
+        };
+
+        // /api-docs 경로에 Swagger UI 마운트
+        app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+
+        // Swagger JSON 엔드포인트 (선택사항)
+        app.get('/api-docs.json', (req, res) => {
+            res.setHeader('Content-Type', 'application/json');
+            res.send(swaggerSpec);
+        });
+
+        console.log('✅ Swagger UI가 /api-docs 경로에 설정되었습니다.');
+    } catch (error) {
+        console.error('❌ Swagger 설정 중 오류 발생:', error.message);
+        console.error(error.stack);
+    }
+}
