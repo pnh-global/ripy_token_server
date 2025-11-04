@@ -15,7 +15,7 @@ async function checkBalance() {
 
     try {
         const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-        const secretKey = bs58.decode(process.env.SERVICE_WALLET_SECRET_KEY);
+        const secretKey = bs58.decode(process.env.COMPANY_WALLET_PRIVATE_KEY);
         const keypair = Keypair.fromSecretKey(secretKey);
 
         console.log('지갑 주소:', keypair.publicKey.toBase58());

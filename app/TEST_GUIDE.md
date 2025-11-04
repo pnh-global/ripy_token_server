@@ -39,8 +39,8 @@ npm run generate-wallet
 ```env
 SOLANA_RPC_URL=https://api.devnet.solana.com
 SOLANA_NETWORK=devnet
-SERVICE_WALLET_SECRET_KEY=YourGeneratedBase58SecretKey
-TOKEN_MINT_ADDRESS=YourDevnetTokenMintAddress
+COMPANY_WALLET_PRIVATE_KEY=YourGeneratedBase58SecretKey
+RIPY_TOKEN_MINT_ADDRESS=YourDevnetTokenMintAddress
 TOKEN_DECIMALS=9
 ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 NODE_ENV=test
@@ -52,7 +52,7 @@ NODE_ENV=test
 
 Devnet에서 사용 가능한 테스트 토큰 주소를 사용합니다.
 ```env
-TOKEN_MINT_ADDRESS=YourExistingDevnetTokenMintAddress
+RIPY_TOKEN_MINT_ADDRESS=YourExistingDevnetTokenMintAddress
 ```
 
 #### 옵션 B: 새 테스트 토큰 생성
@@ -138,7 +138,7 @@ node create-test-token.js --create-ata
 2. 지갑 주소 입력하여 수동 에어드랍
 3. 또는 24시간 대기
 
-### 문제 3: "SERVICE_WALLET_SECRET_KEY 환경변수가 설정되지 않았습니다"
+### 문제 3: "COMPANY_WALLET_PRIVATE_KEY 환경변수가 설정되지 않았습니다"
 
 **원인**: .env.test 파일 미설정 또는 잘못된 경로
 
@@ -180,7 +180,7 @@ testTimeout: 60000  // 30000 → 60000
 
 - [ ] `.env.test` 파일 생성 및 설정 완료
 - [ ] Devnet 테스트 지갑에 SOL 보유 (최소 0.1 SOL)
-- [ ] `TOKEN_MINT_ADDRESS` 설정 완료
+- [ ] `RIPY_TOKEN_MINT_ADDRESS` 설정 완료
 - [ ] 테스트 지갑에 ATA 생성 완료
 - [ ] 필요한 경우 토큰 잔액 보유
 - [ ] `npm install` 실행 완료

@@ -36,14 +36,14 @@ if (result.error) {
 // 환경변수 백업 및 우선순위 처리
 // ============================================
 
-// SERVICE_WALLET_SECRET_KEY 우선순위 처리
-if (!process.env.SERVICE_WALLET_SECRET_KEY && process.env.SERVICE_WALLET_SECRET_KEY_DEVNET) {
-    process.env.SERVICE_WALLET_SECRET_KEY = process.env.SERVICE_WALLET_SECRET_KEY_DEVNET;
+// COMPANY_WALLET_PRIVATE_KEY 우선순위 처리
+if (!process.env.COMPANY_WALLET_PRIVATE_KEY && process.env.COMPANY_WALLET_PRIVATE_KEY_DEVNET) {
+    process.env.COMPANY_WALLET_PRIVATE_KEY = process.env.COMPANY_WALLET_PRIVATE_KEY_DEVNET;
 }
 
-// TOKEN_MINT_ADDRESS 우선순위 처리
-if (!process.env.TOKEN_MINT_ADDRESS && process.env.TEST_TOKEN_MINT) {
-    process.env.TOKEN_MINT_ADDRESS = process.env.TEST_TOKEN_MINT;
+// RIPY_TOKEN_MINT_ADDRESS 우선순위 처리
+if (!process.env.RIPY_TOKEN_MINT_ADDRESS && process.env.TEST_TOKEN_MINT) {
+    process.env.RIPY_TOKEN_MINT_ADDRESS = process.env.TEST_TOKEN_MINT;
 }
 
 // RPC_URL 우선순위 처리
@@ -64,8 +64,8 @@ console.log(`네트워크: ${process.env.SOLANA_NETWORK || 'devnet'}`);
 console.log(`토큰 Decimals: ${process.env.TOKEN_DECIMALS || '9'}`);
 console.log('');
 console.log('환경변수 로드 상태:');
-console.log(`  - SERVICE_WALLET_SECRET_KEY: ${process.env.SERVICE_WALLET_SECRET_KEY ? '✅ 로드됨' : '❌ 없음'}`);
-console.log(`  - TOKEN_MINT_ADDRESS: ${process.env.TOKEN_MINT_ADDRESS ? '✅ 로드됨' : '❌ 없음'}`);
+console.log(`  - COMPANY_WALLET_PRIVATE_KEY: ${process.env.COMPANY_WALLET_PRIVATE_KEY ? '✅ 로드됨' : '❌ 없음'}`);
+console.log(`  - RIPY_TOKEN_MINT_ADDRESS: ${process.env.RIPY_TOKEN_MINT_ADDRESS ? '✅ 로드됨' : '❌ 없음'}`);
 console.log(`  - ENCRYPTION_KEY: ${process.env.ENCRYPTION_KEY ? '✅ 로드됨' : '❌ 없음'}`);
 console.log('='.repeat(60));
 console.log('');

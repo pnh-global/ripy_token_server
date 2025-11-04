@@ -144,14 +144,14 @@ NODE_ENV=test
 `;
         }
 
-        // SERVICE_WALLET_SECRET_KEY 업데이트
-        if (envContent.includes('SERVICE_WALLET_SECRET_KEY=')) {
+        // COMPANY_WALLET_PRIVATE_KEY 업데이트
+        if (envContent.includes('COMPANY_WALLET_PRIVATE_KEY=')) {
             envContent = envContent.replace(
-                /SERVICE_WALLET_SECRET_KEY=.*/,
-                `SERVICE_WALLET_SECRET_KEY=${secretKey}`
+                /COMPANY_WALLET_PRIVATE_KEY=.*/,
+                `COMPANY_WALLET_PRIVATE_KEY=${secretKey}`
             );
         } else {
-            envContent += `\nSERVICE_WALLET_SECRET_KEY=${secretKey}`;
+            envContent += `\nCOMPANY_WALLET_PRIVATE_KEY=${secretKey}`;
         }
 
         // 주석 추가
@@ -196,7 +196,7 @@ async function main() {
     console.log('\n' + '='.repeat(60));
     console.log('다음 단계:');
     console.log('='.repeat(60));
-    console.log('1. .env.test 파일에서 TOKEN_MINT_ADDRESS를 설정하세요');
+    console.log('1. .env.test 파일에서 RIPY_TOKEN_MINT_ADDRESS를 설정하세요');
     console.log('   - Devnet에서 테스트 토큰을 생성하거나');
     console.log('   - 기존 Devnet 토큰 주소를 사용하세요');
     console.log('\n2. ATA(Associated Token Account)를 생성하세요');

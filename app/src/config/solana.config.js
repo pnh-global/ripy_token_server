@@ -82,13 +82,16 @@ export const SOLANA_CONFIG = {
 
     // 회사 지갑 시크릿 키 (Base58 형식)
     // 실제 운영 시에는 NCLOUD Secret Manager에서 가져와야 함
-    SERVICE_WALLET_SECRET_KEY: getEnvVariable('SERVICE_WALLET_SECRET_KEY'),
+    COMPANY_WALLET_PRIVATE_KEY: getEnvVariable('COMPANY_WALLET_PRIVATE_KEY'),
 
-    // 회사 지갑 공개키 주소
-    COMPANY_WALLET_ADDRESS: 'BLy5EXrh5BNVBuQTCS7XQAGnNfrdNpFuxsxTTgdVxqPh',
+    // ✅ 수정: 회사 지갑 공개키 주소 (환경변수에서 로드)
+    COMPANY_WALLET_ADDRESS: getEnvVariable(
+        'COMPANY_WALLET_ADDRESS',
+        'BLy5EXrh5BNVBuQTCS7XQAGnNfrdNpFuxsxTTgdVxqPh' // 기본값 (개발용)
+    ),
 
     // RIPY 토큰 민트 주소
-    TOKEN_MINT_ADDRESS: getEnvVariable('TOKEN_MINT_ADDRESS'),
+    RIPY_TOKEN_MINT_ADDRESS: getEnvVariable('RIPY_TOKEN_MINT_ADDRESS'),
 
     // 토큰 소수점 자리수 (일반적으로 9)
     TOKEN_DECIMALS: parseInt(getEnvVariable('TOKEN_DECIMALS', '9'), 10),
@@ -147,10 +150,10 @@ export const COMPANY_WALLET_PUBLIC_KEY = new PublicKey(
  * RIPY 토큰 민트 공개키 객체
  * 토큰 전송 시 사용됩니다.
  *
- * 주의: TOKEN_MINT_ADDRESS가 설정되지 않으면 null
+ * 주의: RIPY_TOKEN_MINT_ADDRESS가 설정되지 않으면 null
  */
-export const TOKEN_MINT_PUBLIC_KEY = SOLANA_CONFIG.TOKEN_MINT_ADDRESS
-    ? new PublicKey(SOLANA_CONFIG.TOKEN_MINT_ADDRESS)
+export const TOKEN_MINT_PUBLIC_KEY = SOLANA_CONFIG.RIPY_TOKEN_MINT_ADDRESS
+    ? new PublicKey(SOLANA_CONFIG.RIPY_TOKEN_MINT_ADDRESS)
     : null;
 
 /**
@@ -182,12 +185,12 @@ export function validateSolanaConfig() {
 
     // 운영 환경에서 필수 항목 검증
     if (process.env.NODE_ENV === 'production') {
-        if (!SOLANA_CONFIG.SERVICE_WALLET_SECRET_KEY) {
-            errors.push('SERVICE_WALLET_SECRET_KEY가 설정되지 않았습니다. (운영 환경 필수)');
+        if (!SOLANA_CONFIG.COMPANY_WALLET_PRIVATE_KEY) {
+            errors.push('COMPANY_WALLET_PRIVATE_KEY가 설정되지 않았습니다. (운영 환경 필수)');
         }
 
-        if (!SOLANA_CONFIG.TOKEN_MINT_ADDRESS) {
-            errors.push('TOKEN_MINT_ADDRESS가 설정되지 않았습니다. (운영 환경 필수)');
+        if (!SOLANA_CONFIG.RIPY_TOKEN_MINT_ADDRESS) {
+            errors.push('RIPY_TOKEN_MINT_ADDRESS가 설정되지 않았습니다. (운영 환경 필수)');
         }
 
         if (SOLANA_CONFIG.NETWORK !== 'mainnet-beta') {
@@ -195,12 +198,12 @@ export function validateSolanaConfig() {
         }
     }
 
-    // TOKEN_MINT_ADDRESS 형식 검증 (설정된 경우)
-    if (SOLANA_CONFIG.TOKEN_MINT_ADDRESS) {
+    // RIPY_TOKEN_MINT_ADDRESS 형식 검증 (설정된 경우)
+    if (SOLANA_CONFIG.RIPY_TOKEN_MINT_ADDRESS) {
         try {
-            new PublicKey(SOLANA_CONFIG.TOKEN_MINT_ADDRESS);
+            new PublicKey(SOLANA_CONFIG.RIPY_TOKEN_MINT_ADDRESS);
         } catch (error) {
-            errors.push('TOKEN_MINT_ADDRESS가 유효한 Solana 주소가 아닙니다.');
+            errors.push('RIPY_TOKEN_MINT_ADDRESS가 유효한 Solana 주소가 아닙니다.');
         }
     }
 
@@ -226,7 +229,7 @@ export function logSolanaConfig() {
     console.log(`RPC URL: ${SOLANA_CONFIG.RPC_URL}`);
     console.log(`Network: ${SOLANA_CONFIG.NETWORK}`);
     console.log(`Company Wallet: ${SOLANA_CONFIG.COMPANY_WALLET_ADDRESS}`);
-    console.log(`Token Mint: ${SOLANA_CONFIG.TOKEN_MINT_ADDRESS || '(미설정)'}`);
+    console.log(`Token Mint: ${SOLANA_CONFIG.RIPY_TOKEN_MINT_ADDRESS || '(미설정)'}`);
     console.log(`Token Decimals: ${SOLANA_CONFIG.TOKEN_DECIMALS}`);
     console.log(`Commitment: ${SOLANA_CONFIG.COMMITMENT}`);
     console.log(`Timeout: ${SOLANA_CONFIG.TIMEOUT}ms`);
@@ -234,9 +237,9 @@ export function logSolanaConfig() {
     console.log(`Retry Delay: ${SOLANA_CONFIG.RETRY_DELAY}ms`);
 
     // 시크릿 키는 마스킹 처리
-    if (SOLANA_CONFIG.SERVICE_WALLET_SECRET_KEY) {
-        const masked = SOLANA_CONFIG.SERVICE_WALLET_SECRET_KEY.substring(0, 8) + '...' +
-            SOLANA_CONFIG.SERVICE_WALLET_SECRET_KEY.slice(-4);
+    if (SOLANA_CONFIG.COMPANY_WALLET_PRIVATE_KEY) {
+        const masked = SOLANA_CONFIG.COMPANY_WALLET_PRIVATE_KEY.substring(0, 8) + '...' +
+            SOLANA_CONFIG.COMPANY_WALLET_PRIVATE_KEY.slice(-4);
         console.log(`Service Wallet Key: ${masked}`);
     } else {
         console.log(`Service Wallet Key: (미설정)`);

@@ -85,10 +85,10 @@ export function createConnection() {
 export function loadCompanyWallet(secretKeyBase58 = null) {
     try {
         // 시크릿 키 가져오기 (파라미터 또는 환경변수)
-        const secretKey = secretKeyBase58 || SOLANA_CONFIG.SERVICE_WALLET_SECRET_KEY;
+        const secretKey = secretKeyBase58 || SOLANA_CONFIG.COMPANY_WALLET_PRIVATE_KEY;
 
         if (!secretKey) {
-            throw new Error('회사 지갑 시크릿 키가 설정되지 않았습니다. (SERVICE_WALLET_SECRET_KEY)');
+            throw new Error('회사 지갑 시크릿 키가 설정되지 않았습니다. (COMPANY_WALLET_PRIVATE_KEY)');
         }
 
         // 보안: 시크릿 키 최소 길이 검증

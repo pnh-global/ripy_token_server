@@ -24,7 +24,7 @@ async function createTestToken() {
         const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
         // 회사 지갑 로드
-        const secretKey = bs58.decode(process.env.SERVICE_WALLET_SECRET_KEY);
+        const secretKey = bs58.decode(process.env.COMPANY_WALLET_PRIVATE_KEY);
         const payer = Keypair.fromSecretKey(secretKey);
 
         console.log('회사 지갑:', payer.publicKey.toBase58());
@@ -83,7 +83,7 @@ async function createTestToken() {
         console.log('========================================');
         console.log('.env 파일 업데이트 필요:');
         console.log('========================================\n');
-        console.log(`TOKEN_MINT_ADDRESS=${mint.toBase58()}`);
+        console.log(`RIPY_TOKEN_MINT_ADDRESS=${mint.toBase58()}`);
         console.log('');
 
         console.log('========================================');

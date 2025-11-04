@@ -22,11 +22,11 @@ async function sendTokenToPhantom() {
         const connection = new Connection(process.env.SOLANA_RPC_URL, 'confirmed');
 
         // 회사 지갑 로드
-        const secretKey = bs58.decode(process.env.SERVICE_WALLET_SECRET_KEY);
+        const secretKey = bs58.decode(process.env.COMPANY_WALLET_PRIVATE_KEY);
         const companyWallet = Keypair.fromSecretKey(secretKey);
 
         // 토큰 민트
-        const mintPublicKey = new PublicKey(process.env.TOKEN_MINT_ADDRESS);
+        const mintPublicKey = new PublicKey(process.env.RIPY_TOKEN_MINT_ADDRESS);
 
         // 팬텀 지갑 주소
         const phantomWallet = new PublicKey('BLy5EXrh5BNVBuQTCS7XQAGnNfrdNpFuxsxTTgdVxqPh');

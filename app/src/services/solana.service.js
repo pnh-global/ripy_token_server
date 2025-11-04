@@ -47,10 +47,10 @@ function getCompanyWallet() {
  * 토큰 민트 공개키 가져오기
  */
 function getTokenMintPublicKey() {
-    if (!SOLANA_CONFIG.TOKEN_MINT_ADDRESS) {
-        throw new Error('TOKEN_MINT_ADDRESS가 설정되지 않았습니다.');
+    if (!SOLANA_CONFIG.RIPY_TOKEN_MINT_ADDRESS) {
+        throw new Error('RIPY_TOKEN_MINT_ADDRESS가 설정되지 않았습니다.');
     }
-    return new PublicKey(SOLANA_CONFIG.TOKEN_MINT_ADDRESS);
+    return new PublicKey(SOLANA_CONFIG.RIPY_TOKEN_MINT_ADDRESS);
 }
 
 /**

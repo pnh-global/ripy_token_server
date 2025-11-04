@@ -10,7 +10,7 @@
 process.env.ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 process.env.NODE_ENV = 'test';
 process.env.COMPANY_WALLET_ADDRESS = 'CompanyWallet1234567890123456789012345';
-process.env.RIPY_TOKEN_MINT_ADDRESS = 'RIPYTokenMint1234567890123456789012345';
+process.env.RIPY_RIPY_TOKEN_MINT_ADDRESS = 'RIPYTokenMint1234567890123456789012345';
 process.env.SOLANA_RPC_URL = 'https://api.devnet.solana.com';
 
 // ============================================

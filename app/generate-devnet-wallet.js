@@ -26,5 +26,5 @@ console.log('⚠️  절대 운영 환경에서 사용하지 마세요!');
 console.log('\n========================================');
 console.log('.env 파일 업데이트:');
 console.log('========================================\n');
-console.log(`SERVICE_WALLET_SECRET_KEY=${bs58.encode(keypair.secretKey)}`);
+console.log(`COMPANY_WALLET_PRIVATE_KEY=${bs58.encode(keypair.secretKey)}`);
 console.log('\n========================================\n');

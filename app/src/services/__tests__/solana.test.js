@@ -51,7 +51,7 @@ beforeAll(() => {
     console.log('네트워크:', process.env.SOLANA_NETWORK || 'devnet');
     console.log('테스트 사용자 지갑:', testUserWallet.publicKey.toBase58());
     console.log('테스트 수신자 지갑:', testRecipientWallet.publicKey.toBase58());
-    console.log('회사 지갑:', process.env.SERVICE_WALLET_PUBLIC_KEY);
+    console.log('회사 지갑:', process.env.COMPANY_WALLET_ADDRESS);
     console.log('='.repeat(60) + '\n');
 });
 
@@ -95,8 +95,8 @@ describe('createPartialSignedTransaction', () => {
             console.log('✅ 부분서명 트랜잭션 생성 성공');
 
         } catch (error) {
-            if (error.message.includes('SERVICE_WALLET_SECRET_KEY') ||
-                error.message.includes('TOKEN_MINT_ADDRESS') ||
+            if (error.message.includes('COMPANY_WALLET_PRIVATE_KEY') ||
+                error.message.includes('RIPY_TOKEN_MINT_ADDRESS') ||
                 error.message.includes('ATA')) {
                 console.log('⚠️  환경변수 미설정 또는 ATA 없음 - 테스트 스킵');
                 expect(true).toBe(true);
@@ -157,7 +157,7 @@ describe('bulkTransfer', () => {
     test('다중 수신자에게 일괄 전송해야 함', async () => {
         const recipients = [
             {
-                wallet_address: process.env.SERVICE_WALLET_PUBLIC_KEY,
+                wallet_address: process.env.COMPANY_WALLET_ADDRESS,
                 amount: 1
             }
         ];
@@ -216,8 +216,8 @@ describe('getTokenBalance', () => {
             console.log('✅ 토큰 잔액 조회 성공');
 
         } catch (error) {
-            if (error.message.includes('TOKEN_MINT_ADDRESS')) {
-                console.log('⚠️  TOKEN_MINT_ADDRESS 미설정 - 테스트 스킵');
+            if (error.message.includes('RIPY_TOKEN_MINT_ADDRESS')) {
+                console.log('⚠️  RIPY_TOKEN_MINT_ADDRESS 미설정 - 테스트 스킵');
                 expect(true).toBe(true);
             } else {
                 throw error;

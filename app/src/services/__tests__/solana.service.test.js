@@ -46,15 +46,15 @@ beforeAll(() => {
     process.env.TOKEN_DECIMALS = '9';
 
     // .env.test 파일의 환경변수 로드 (테스트 전용)
-    // SERVICE_WALLET_SECRET_KEY가 없으면 .env.test의 값 사용
-    if (!process.env.SERVICE_WALLET_SECRET_KEY) {
+    // COMPANY_WALLET_PRIVATE_KEY가 없으면 .env.test의 값 사용
+    if (!process.env.COMPANY_WALLET_PRIVATE_KEY) {
         // .env.test에서 읽어온 값 (dotenv는 이미 로드됨)
-        process.env.SERVICE_WALLET_SECRET_KEY = process.env.SERVICE_WALLET_SECRET_KEY_DEVNET || '';
+        process.env.COMPANY_WALLET_PRIVATE_KEY = process.env.COMPANY_WALLET_PRIVATE_KEY_DEVNET || '';
     }
 
     // TOKEN_MINT_ADDRESS가 없으면 .env.test의 값 사용
-    if (!process.env.TOKEN_MINT_ADDRESS) {
-        process.env.TOKEN_MINT_ADDRESS = process.env.TEST_TOKEN_MINT || '';
+    if (!process.env.RIPY_TOKEN_MINT_ADDRESS) {
+        process.env.RIPY_TOKEN_MINT_ADDRESS = process.env.TEST_TOKEN_MINT || '';
     }
 
     // 테스트용 지갑 생성
@@ -89,7 +89,7 @@ describe('createPartialSignedTransaction', () => {
         const amount = 10.5;
 
         // When: 부분서명 트랜잭션 생성
-        // 주의: 실제로는 환경변수에 SERVICE_WALLET_SECRET_KEY, TOKEN_MINT_ADDRESS 필요
+        // 주의: 실제로는 환경변수에 COMPANY_WALLET_PRIVATE_KEY, RIPY_TOKEN_MINT_ADDRESS 필요
         // 이 테스트는 환경변수가 설정되어 있을 때만 통과
 
         try {
@@ -125,8 +125,8 @@ describe('createPartialSignedTransaction', () => {
 
         } catch (error) {
             // 환경변수 미설정 시 예상되는 에러
-            if (error.message.includes('SERVICE_WALLET_SECRET_KEY') ||
-                error.message.includes('TOKEN_MINT_ADDRESS') ||
+            if (error.message.includes('COMPANY_WALLET_PRIVATE_KEY') ||
+                error.message.includes('RIPY_TOKEN_MINT_ADDRESS') ||
                 error.message.includes('ATA')) {
                 console.log('⚠️  환경변수 미설정 또는 ATA 없음 - 테스트 스킵');
                 expect(true).toBe(true); // 환경 문제는 통과 처리
@@ -304,8 +304,8 @@ describe('getTokenBalance', () => {
             console.log('   - Decimals:', result.decimals);
 
         } catch (error) {
-            if (error.message.includes('TOKEN_MINT_ADDRESS')) {
-                console.log('⚠️  TOKEN_MINT_ADDRESS 미설정 - 테스트 스킵');
+            if (error.message.includes('RIPY_TOKEN_MINT_ADDRESS')) {
+                console.log('⚠️  RIPY_TOKEN_MINT_ADDRESS 미설정 - 테스트 스킵');
                 expect(true).toBe(true);
             } else {
                 throw error;
