@@ -1,7 +1,8 @@
 import { Router } from "express";
 import healthRouter from "./health.routes.js";
 import sendRouter from "./send.routes.js";
-import solanaRouter from "./solana.routes.js";  // 추가
+import solanaRouter from "./solana.routes.js";
+import signRouter from "./sign.routes.js";
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.get("/health", async (req, res) => {
 router.use("/health", healthRouter);
 router.use("/api/send", sendRouter);
 router.use("/api/solana", solanaRouter);
+router.use("/api/sign", signRouter);
 
 export default router;

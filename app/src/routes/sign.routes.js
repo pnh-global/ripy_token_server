@@ -9,7 +9,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../middlewares/asyncHandler.js';
 import { apiKeyMiddleware } from '../middlewares/apiKeyMiddleware.js';
 import { createSign } from '../controllers/createSign.controller.js';
-// import { finalizeSign } from '../controllers/finalizeSign.controller.js';  // 다음 단계에서 구현
+import { finalizeSign } from '../controllers/finalizeSign.controller.js';  // 주석 해제
 // import { verifySign } from '../controllers/verifySign.controller.js';      // 선택 사항
 
 const router = Router();
@@ -30,7 +30,7 @@ router.post('/create', asyncHandler(createSign));
  * 최종 서명 완료 처리
  * (다음 단계에서 구현)
  */
-// router.post('/finalize', asyncHandler(finalizeSign));
+router.post('/finalize', asyncHandler(finalizeSign));
 
 /**
  * POST /api/sign/verify
