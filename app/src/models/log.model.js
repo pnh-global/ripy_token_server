@@ -50,36 +50,44 @@ export async function insertLog(data) {
     try {
         // ========== 필수 필드 검증 ==========
         if (!data.cate1) {
+            console.log('!data.cate1');
             throw new Error('cate1 is required');
         }
 
         if (!data.cate2) {
+            console.log('!data.cate2');
             throw new Error('cate2 is required');
         }
 
         if (!data.request_id) {
+            console.log('!data.request_id');
             throw new Error('request_id is required');
         }
 
         if (!data.req_ip_text) {
+            console.log('!data.req_ip_text');
             throw new Error('req_ip_text is required');
         }
 
         if (!data.req_status) {
+            console.log('!data.req_status');
             throw new Error('req_status is required');
         }
 
         if (!data.api_name) {
+            console.log('!data.api_name');
             throw new Error('api_name is required');
         }
 
         // ========== req_status 값 검증 ==========
         if (!['Y', 'N'].includes(data.req_status)) {
+            console.log('includes(data.req_status)');
             throw new Error('req_status must be either "Y" or "N"');
         }
 
         // ========== IP 주소 형식 검증 ==========
         if (!isValidIP(data.req_ip_text)) {
+            console.log('data.req_ip_text');
             throw new Error('Invalid IP address');
         }
 
