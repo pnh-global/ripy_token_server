@@ -1,0 +1,500 @@
+{
+  "info": {
+    "name": "RIPY Token Server - Phase 2-E Step 1 (현재 구현 API)",
+    "description": "현재 구현된 API들에 대한 통합 테스트 컬렉션\n\n포함 API:\n1. Health Check\n2. Sign APIs (create/finalize)\n3. Log API (POST)\n\n테스트 환경: http://localhost:4000",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "ripy-token-server"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "contract_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "request_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "test_sender_wallet",
+      "value": "BLy5EXrh5BNVBuQTCS7XQAGnNfrdNpFuxsxTTgdVxqPh",
+      "type": "string"
+    },
+    {
+      "key": "test_recipient_wallet",
+      "value": "7EqQdEUqrLxPLvHcJZqZvZ5c5ZQkJ5fD3sxVXhAKZJ8u",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health Check",
+      "item": [
+        {
+          "name": "GET /health - 서버 상태 체크",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// 응답 시간 체크",
+                  "pm.test('응답 시간이 200ms 이하', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(200);",
+                  "});",
+                  "",
+                  "// 상태 코드 체크",
+                  "pm.test('상태 코드가 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// 응답 형식 체크",
+                  "pm.test('응답이 JSON 형식', function () {",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "// 응답 내용 체크",
+                  "pm.test('ok 필드가 true', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('ok');",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('status 필드가 존재하고 healthy', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData.status).to.eql('healthy');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "서버의 헬스 체크를 수행합니다.\n\n예상 응답:\n```json\n{\n  \"ok\": true,\n  \"status\": \"healthy\",\n  \"timestamp\": \"2025-01-28T10:00:00.000Z\"\n}\n```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Sign API - E2E Flow",
+      "item": [
+        {
+          "name": "POST /api/sign/create - 계약서 생성 (부분서명)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// 상태 코드 체크",
+                  "pm.test('상태 코드가 200 또는 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "// 응답 형식 체크",
+                  "pm.test('응답이 JSON 형식', function () {",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "// ok 필드 체크",
+                  "pm.test('ok 필드가 true', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('ok');",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "});",
+                  "",
+                  "// contract_id 저장",
+                  "pm.test('contract_id가 반환됨', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('contract_id');",
+                  "    pm.expect(jsonData.contract_id).to.be.a('string');",
+                  "    pm.expect(jsonData.contract_id).to.have.lengthOf.at.least(10);",
+                  "    ",
+                  "    // 환경 변수에 저장",
+                  "    pm.collectionVariables.set('contract_id', jsonData.contract_id);",
+                  "    console.log('저장된 contract_id:', jsonData.contract_id);",
+                  "});",
+                  "",
+                  "// partial_signed_tx 체크",
+                  "pm.test('partial_signed_tx가 반환됨', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('partial_signed_tx');",
+                  "    pm.expect(jsonData.partial_signed_tx).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cate1\": \"test\",\n  \"cate2\": \"integration\",\n  \"sender\": \"{{test_sender_wallet}}\",\n  \"recipient\": \"{{test_recipient_wallet}}\",\n  \"amount\": 10.5,\n  \"memo\": \"Phase 2-E 통합 테스트\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/sign/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sign", "create"]
+            },
+            "description": "부분 서명된 계약서를 생성합니다.\n\n**Request Body:**\n- cate1: 분류1 (예: test)\n- cate2: 분류2 (예: integration)\n- sender: 발신자 지갑 주소 (Solana Base58)\n- recipient: 수신자 지갑 주소 (Solana Base58)\n- amount: 전송 금액 (RIPY 토큰)\n- memo: 메모 (선택)\n\n**Response:**\n```json\n{\n  \"ok\": true,\n  \"contract_id\": \"uuid-string\",\n  \"partial_signed_tx\": \"base64-encoded-transaction\"\n}\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/sign/finalize - 최종 서명 완료",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// contract_id 확인",
+                  "const contractId = pm.collectionVariables.get('contract_id');",
+                  "if (!contractId) {",
+                  "    console.error('contract_id가 설정되지 않았습니다. 먼저 /api/sign/create를 실행하세요.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// 상태 코드 체크",
+                  "pm.test('상태 코드가 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// 응답 형식 체크",
+                  "pm.test('응답이 JSON 형식', function () {",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "// ok 필드 체크",
+                  "pm.test('ok 필드가 true', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('ok');",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "});",
+                  "",
+                  "// txid 체크",
+                  "pm.test('txid가 반환됨', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('txid');",
+                  "    pm.expect(jsonData.txid).to.be.a('string');",
+                  "    pm.expect(jsonData.txid).to.have.lengthOf.at.least(32);",
+                  "});",
+                  "",
+                  "// status 체크",
+                  "pm.test('status가 complete', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData.status).to.eql('complete');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contract_id\": \"{{contract_id}}\",\n  \"user_signature\": \"mock-user-signature-base64-encoded-string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/sign/finalize",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sign", "finalize"]
+            },
+            "description": "사용자의 서명을 추가하여 최종 서명을 완료하고 Solana 네트워크에 전송합니다.\n\n**Request Body:**\n- contract_id: 이전 단계에서 받은 계약서 ID\n- user_signature: 사용자의 서명 (Base64)\n\n**Response:**\n```json\n{\n  \"ok\": true,\n  \"txid\": \"solana-transaction-id\",\n  \"status\": \"complete\"\n}\n```"
+          },
+          "response": []
+        }
+      ],
+      "description": "부분 서명 API의 E2E 플로우 테스트\n\n**시나리오:**\n1. POST /api/sign/create → contract_id 획득\n2. POST /api/sign/finalize → 최종 서명 및 전송"
+    },
+    {
+      "name": "3. Log API",
+      "item": [
+        {
+          "name": "POST /api/log - 로그 기록",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// 상태 코드 체크",
+                  "pm.test('상태 코드가 200 또는 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "// 응답 형식 체크",
+                  "pm.test('응답이 JSON 형식', function () {",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "// ok 필드 체크",
+                  "pm.test('ok 필드가 true', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('ok');",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "});",
+                  "",
+                  "// idx와 request_id 체크",
+                  "pm.test('idx와 request_id가 반환됨', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('idx');",
+                  "    pm.expect(jsonData).to.have.property('request_id');",
+                  "    pm.expect(jsonData.idx).to.be.a('number');",
+                  "    pm.expect(jsonData.request_id).to.be.a('string');",
+                  "    ",
+                  "    // request_id 저장",
+                  "    pm.collectionVariables.set('request_id', jsonData.request_id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cate1\": \"test\",\n  \"cate2\": \"integration_log\",\n  \"api_name\": \"/api/test/integration\",\n  \"req_status\": \"Y\",\n  \"result_code\": \"200\",\n  \"content\": \"Phase 2-E 통합 테스트 로그\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/log",
+              "host": ["{{base_url}}"],
+              "path": ["api", "log"]
+            },
+            "description": "r_log 테이블에 로그를 기록합니다.\n\n**Request Body:**\n- cate1: 분류1 (필수)\n- cate2: 분류2 (필수)\n- api_name: API 이름 (필수)\n- req_status: 요청 상태 (Y/N)\n- result_code: 결과 코드\n- content: 로그 내용\n\n**Response:**\n```json\n{\n  \"ok\": true,\n  \"idx\": 123,\n  \"request_id\": \"uuid-string\"\n}\n```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Error Handling Tests",
+      "item": [
+        {
+          "name": "POST /api/sign/create - 잘못된 amount (0 이하)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// 에러 상태 코드 체크",
+                  "pm.test('상태 코드가 400 (Bad Request)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "// 응답 형식 체크",
+                  "pm.test('응답이 JSON 형식', function () {",
+                  "    pm.response.to.be.json;",
+                  "});",
+                  "",
+                  "// ok 필드가 false",
+                  "pm.test('ok 필드가 false', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('ok');",
+                  "    pm.expect(jsonData.ok).to.be.false;",
+                  "});",
+                  "",
+                  "// error 메시지 존재",
+                  "pm.test('error 메시지가 존재', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('error');",
+                  "    pm.expect(jsonData.error).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cate1\": \"test\",\n  \"cate2\": \"error_test\",\n  \"sender\": \"{{test_sender_wallet}}\",\n  \"recipient\": \"{{test_recipient_wallet}}\",\n  \"amount\": -10,\n  \"memo\": \"음수 금액 테스트\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/sign/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sign", "create"]
+            },
+            "description": "음수 금액으로 요청하여 에러 처리를 테스트합니다.\n\n**예상 응답:**\n```json\n{\n  \"ok\": false,\n  \"error\": \"금액은 0보다 큰 숫자여야 합니다.\"\n}\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/sign/create - 잘못된 지갑 주소",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// 에러 상태 코드 체크",
+                  "pm.test('상태 코드가 400 (Bad Request)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "// ok 필드가 false",
+                  "pm.test('ok 필드가 false', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.false;",
+                  "});",
+                  "",
+                  "// error 메시지 존재",
+                  "pm.test('error 메시지에 주소 관련 내용 포함', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.error).to.include('주소');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cate1\": \"test\",\n  \"cate2\": \"error_test\",\n  \"sender\": \"invalid-wallet-address\",\n  \"recipient\": \"{{test_recipient_wallet}}\",\n  \"amount\": 10,\n  \"memo\": \"잘못된 주소 테스트\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/sign/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sign", "create"]
+            },
+            "description": "잘못된 형식의 지갑 주소로 요청하여 에러 처리를 테스트합니다."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/sign/finalize - 존재하지 않는 contract_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// 에러 상태 코드 체크",
+                  "pm.test('상태 코드가 404 (Not Found)', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "// ok 필드가 false",
+                  "pm.test('ok 필드가 false', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.false;",
+                  "});",
+                  "",
+                  "// error 메시지 존재",
+                  "pm.test('error 메시지에 contract 관련 내용 포함', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.error).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contract_id\": \"non-existent-contract-id-12345\",\n  \"user_signature\": \"mock-signature\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/sign/finalize",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sign", "finalize"]
+            },
+            "description": "존재하지 않는 contract_id로 요청하여 에러 처리를 테스트합니다."
+          },
+          "response": []
+        }
+      ],
+      "description": "에러 상황에 대한 핸들링 테스트"
+    }
+  ]
+}
