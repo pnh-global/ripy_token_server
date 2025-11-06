@@ -370,7 +370,7 @@ export async function createSign(req, res) {
             decryptedData = req.body;
         } else {
             // 프로덕션: 암호화된 데이터 복호화
-            const decryptedString = decrypt(req.body.data, encryptionKey);
+            const decryptedString = decrypt(req.body.data, env.ENCRYPTION_KEY);
             decryptedData = JSON.parse(decryptedString);
         }
 
