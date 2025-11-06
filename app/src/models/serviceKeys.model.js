@@ -214,6 +214,8 @@ export async function verifyServiceKey(keyHash) {
         );
 
         if (rows.length === 0) {
+            console.log(keyHash);
+            console.log('verifyServiceKey : rows.length === 0');
             return null;
         }
 
@@ -221,6 +223,7 @@ export async function verifyServiceKey(keyHash) {
 
         // 상태가 ACTIVE가 아니면 null 반환
         if (key.status !== 'ACTIVE') {
+            console.log('verifyServiceKey : key.status !== ACTIVE');
             return null;
         }
 

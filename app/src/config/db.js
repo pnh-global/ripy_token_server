@@ -23,6 +23,10 @@ export const pool = mysql.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
+    // UTF-8 문자셋 설정 (utf8mb4 사용)
+    // utf8mb4: MySQL/MariaDB에서 완전한 UTF-8 지원 (이모지 포함)
+    // utf8mb4_unicode_ci: 대소문자 구분 없는 정렬 (Case Insensitive)
+    charset: 'utf8mb4',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,

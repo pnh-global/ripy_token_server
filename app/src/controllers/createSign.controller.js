@@ -357,6 +357,7 @@ export async function createSign(req, res) {
 
         // 2. 암호화된 데이터 검증
         if (!req.body || !req.body.data) {
+            console.log('암호화된 data 필드가 필요합니다.');
             throw new Error('암호화된 data 필드가 필요합니다.');
         }
 
@@ -364,8 +365,14 @@ export async function createSign(req, res) {
         // 웹서버가 service key로 암호화한 데이터를 복호화
         // 주의: 현재는 ENCRYPTION_KEY(마스터 키)로 복호화
         // 향후 service key별로 다른 키를 사용할 경우 수정 필요
-        const decryptedString = decrypt(req.body.data, env.ENCRYPTION_KEY);
-        decryptedData = JSON.parse(decryptedString);
+        if (process.env.NODE_ENV === 'development' && req.body.cate1) {
+            console.log('[CONTROLLER DEBUG] 개발 모드 - 암호화 건너뛰기');
+            decryptedData = req.body;
+        } else {
+            // 프로덕션: 암호화된 데이터 복호화
+            const decryptedString = decrypt(req.body.data, encryptionKey);
+            decryptedData = JSON.parse(decryptedString);
+        }
 
         console.log('[CONTROLLER DEBUG] 복호화 완료, 데이터:', {
             cate1: decryptedData.cate1,

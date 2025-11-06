@@ -7,6 +7,7 @@
  * - 사용 기록 업데이트
  */
 
+import crypto from 'crypto';  // 🔥 이 줄 추가!
 import { verifyServiceKey, updateLastUsed } from '../models/serviceKeys.model.js';
 import { Netmask } from 'netmask';
 
@@ -50,6 +51,7 @@ export async function apiKeyMiddleware(req, res, next) {
     try {
         // 1. API Key 헤더 확인
         const apiKey = req.headers['x-api-key'];
+        console.log('[API KEY DEBUG] Received API Key:', apiKey);
 
         if (!apiKey) {
             return res.status(401).json({
@@ -61,8 +63,17 @@ export async function apiKeyMiddleware(req, res, next) {
             });
         }
 
-        // 2. Service Key 검증 (DB 조회)
-        const keyInfo = await verifyServiceKey(apiKey);
+        // 2. API Key를 SHA-256으로 해싱
+        const keyHash = crypto.createHash('sha256')
+            .update(apiKey)
+            .digest('hex')
+            .toUpperCase();
+
+        console.log('[API KEY DEBUG] Calculated Hash:', keyHash);
+
+        // 3. Service Key 검증 (DB 조회)
+        const keyInfo = await verifyServiceKey(keyHash);
+        console.log('[API KEY DEBUG] Key Info:', keyInfo ? 'FOUND' : 'NOT FOUND');
 
         if (!keyInfo) {
             return res.status(401).json({
@@ -74,7 +85,7 @@ export async function apiKeyMiddleware(req, res, next) {
             });
         }
 
-        // 3. IP 주소 확인
+        // 4. IP 주소 확인
         const clientIp = req.ip || req.connection.remoteAddress;
 
         if (!isIpAllowed(clientIp, keyInfo.allow_cidrs)) {
@@ -87,21 +98,21 @@ export async function apiKeyMiddleware(req, res, next) {
             });
         }
 
-        // 4. 요청 객체에 키 정보 저장
+        // 5. 요청 객체에 키 정보 저장
         req.serviceKey = keyInfo;
 
-        // 5. 사용 기록 업데이트
-        // 테스트 환경에서는 동기적으로 처리하여 테스트 가능하게 함
+        // 6. 사용 기록 업데이트
         if (process.env.NODE_ENV === 'test') {
             await updateLastUsed(keyInfo.idx, clientIp, req.hostname);
         } else {
-            // 프로덕션에서는 비동기 처리 (블로킹하지 않음)
             updateLastUsed(keyInfo.idx, clientIp, req.hostname).catch(error => {
                 console.error('Failed to update last used:', error);
             });
         }
 
-        // 6. 다음 미들웨어로 진행
+        console.log('[API KEY DEBUG] Authentication SUCCESS');
+
+        // 7. 다음 미들웨어로 진행
         next();
 
     } catch (error) {
