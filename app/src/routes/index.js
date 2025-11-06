@@ -5,6 +5,7 @@ import solanaRouter from "./solana.routes.js";
 import signRouter from "./sign.routes.js";
 import contractRouter from "./contract.routes.js";
 import logRouter from "./log.routes.js";
+import transferRouter from "./transfer.routes.js";
 
 const router = Router();
 
@@ -31,10 +32,11 @@ const router = Router();
 
 // 다른 API 라우트
 router.use("/health", healthRouter);
-router.use("/api/send", sendRouter);
-router.use("/api/solana", solanaRouter);
-router.use("/api/sign", signRouter);
-router.use("/api/contract", contractRouter);
-router.use("/api/log", logRouter);
+router.use("/send", sendRouter);
+router.use("/solana", solanaRouter);
+router.use("/sign", signRouter);
+router.use("/contract", contractRouter);
+router.use("/log", logRouter);
+router.use("/transfer", transferRouter);
 
 export default router;
