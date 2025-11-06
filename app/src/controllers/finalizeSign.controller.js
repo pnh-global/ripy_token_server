@@ -19,9 +19,10 @@
  * 변경 이력:
  * - 2025-11-04: Phase 1-B 초기 구현
  * - 2025-11-05: Phase 1-B DB 스키마 호환성 개선
+ * - 2025-11-06: import 경로 수정 (프로젝트 구조에 맞춤)
  */
 
-// 모듈 임포트
+// 모듈 임포트 (프로젝트 구조에 맞게 수정)
 import { decrypt, encrypt } from '../utils/encryption.js';
 import { getContractById, updateContract } from '../models/contract.model.js';
 import { insertLog } from '../models/log.model.js';

@@ -199,7 +199,10 @@ export async function getServiceKeyById(idx) {
  */
 export async function verifyServiceKey(keyHash) {
     try {
-        // UNHEX()로 HEX 문자열을 VARBINARY로 변환하여 비교
+        console.log('[VERIFY DEBUG] Input keyHash:', keyHash);
+        console.log('[VERIFY DEBUG] Input keyHash length:', keyHash.length);
+
+        // UPPER() 함수로 대소문자 구분 없이 비교
         const [rows] = await pool.execute(
             `SELECT
                  idx,
@@ -208,24 +211,20 @@ export async function verifyServiceKey(keyHash) {
                  allow_cidrs,
                  allow_hosts
              FROM service_keys
-             WHERE key_hash = UNHEX(?)
-                 LIMIT 1`,
+             WHERE UPPER(HEX(key_hash)) = UPPER(?)
+               AND status = 'ACTIVE'
+             LIMIT 1`,
             [keyHash]
         );
 
+        console.log('[VERIFY DEBUG] Rows found:', rows.length);
+
         if (rows.length === 0) {
-            console.log(keyHash);
-            console.log('verifyServiceKey : rows.length === 0');
+            console.log('[VERIFY DEBUG] Key not found in DB');
             return null;
         }
 
         const key = rows[0];
-
-        // 상태가 ACTIVE가 아니면 null 반환
-        if (key.status !== 'ACTIVE') {
-            console.log('verifyServiceKey : key.status !== ACTIVE');
-            return null;
-        }
 
         // JSON 필드 파싱
         return {
