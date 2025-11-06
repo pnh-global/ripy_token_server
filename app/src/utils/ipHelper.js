@@ -1,126 +1,106 @@
 /**
- * ============================================
- * ipHelper.js - IP 주소 변환 유틸리티
- * ============================================
+ * ipHelper.js
  *
- * 역할:
- * 1. IP 주소(텍스트) -> Binary(VARBINARY) 변환
- * 2. Binary -> IP 주소(텍스트) 변환
- *
- * 왜 필요한가?
- * - r_log, r_blind, service_keys 테이블에서 IP를 VARBINARY(16)로 저장
- * - IPv4/IPv6 모두 지원
- * - 검색 성능 향상
+ * IP 주소 관련 유틸리티 함수
  */
 
 /**
- * IP 주소(텍스트) -> Binary 변환
+ * 클라이언트의 실제 IP 주소를 가져오는 함수
+ * 프록시 환경에서도 올바른 IP를 추출
  *
- * @param {string} ipText - IP 주소 (예: '192.168.1.1')
- * @returns {Buffer} - Binary 형태의 IP
- */
-export function ipToBinary(ipText) {
-    try {
-        // 입력값 기본 검증
-        if (!ipText || typeof ipText !== 'string' || ipText.trim() === '') {
-            throw new Error('유효하지 않은 IPv4 주소');
-        }
-
-        // IPv4 처리
-        const parts = ipText.split('.').map(Number);
-
-        // 옥텟 개수 및 각 값의 유효성 검증
-        if (parts.length !== 4 || parts.some(p => isNaN(p) || p < 0 || p > 255)) {
-            throw new Error('유효하지 않은 IPv4 주소');
-        }
-
-        // Buffer 생성 (4바이트)
-        return Buffer.from(parts);
-
-    } catch (error) {
-        console.error('[IP HELPER ERROR] IP -> Binary 변환 실패:', error.message);
-        throw error;
-    }
-}
-
-/**
- * Binary -> IP 주소(텍스트) 변환
- *
- * @param {Buffer} binary - Binary 형태의 IP
- * @returns {string} - IP 주소 텍스트
- */
-export function binaryToIp(binary) {
-    try {
-        if (!Buffer.isBuffer(binary)) {
-            throw new Error('Buffer 타입이 아닙니다');
-        }
-
-        // IPv4 (4바이트)
-        if (binary.length === 4) {
-            return Array.from(binary).join('.');
-        }
-
-        throw new Error('유효하지 않은 Binary IP 길이');
-
-    } catch (error) {
-        console.error('[IP HELPER ERROR] Binary -> IP 변환 실패:', error.message);
-        throw error;
-    }
-}
-
-/**
- * Express Request에서 클라이언트 IP 추출
- *
- * @param {Object} req - Express Request 객체
- * @returns {string} - 클라이언트 IP 주소
+ * @param {Object} req - Express request 객체
+ * @returns {string} 클라이언트 IP 주소
  */
 export function getClientIp(req) {
-    // X-Forwarded-For 헤더 확인 (Nginx 사용 시)
+    // X-Forwarded-For 헤더 확인 (프록시 환경)
     const forwarded = req.headers['x-forwarded-for'];
+
     if (forwarded) {
+        // X-Forwarded-For는 쉼표로 구분된 IP 목록일 수 있음
+        // 첫 번째 IP가 실제 클라이언트 IP
         return forwarded.split(',')[0].trim();
     }
 
-    // X-Real-IP 헤더 확인
+    // X-Real-IP 헤더 확인 (Nginx 등)
     const realIp = req.headers['x-real-ip'];
     if (realIp) {
         return realIp;
     }
 
-    // 기본: req.ip
-    return req.ip || req.connection?.remoteAddress || '0.0.0.0';
+    // req.ip (Express 기본)
+    if (req.ip) {
+        // IPv6 형식에서 IPv4 추출 (::ffff:127.0.0.1 -> 127.0.0.1)
+        return req.ip.replace(/^::ffff:/, '');
+    }
+
+    // req.connection.remoteAddress (구형 방식)
+    if (req.connection && req.connection.remoteAddress) {
+        return req.connection.remoteAddress.replace(/^::ffff:/, '');
+    }
+
+    // 기본값
+    return '0.0.0.0';
 }
 
 /**
- * IP가 CIDR 범위에 포함되는지 확인
+ * IP 주소가 유효한 형식인지 검증
  *
- * @param {string} ip - 확인할 IP 주소
- * @param {string} cidr - CIDR 표기 (예: '192.168.1.0/24')
- * @returns {boolean} - 포함 여부
+ * @param {string} ip - 검증할 IP 주소
+ * @returns {boolean} 유효 여부
  */
-export function isIpInCIDR(ip, cidr) {
-    try {
-        const [range, bits] = cidr.split('/');
-        const mask = ~(2 ** (32 - parseInt(bits)) - 1);
-
-        const ipNum = ipToNumber(ip);
-        const rangeNum = ipToNumber(range);
-
-        return (ipNum & mask) === (rangeNum & mask);
-
-    } catch (error) {
-        console.error('[IP HELPER ERROR] CIDR 확인 실패:', error.message);
+export function isValidIp(ip) {
+    if (!ip || typeof ip !== 'string') {
         return false;
     }
+
+    // IPv4 정규식
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+
+    if (ipv4Regex.test(ip)) {
+        // 각 옥텟이 0-255 범위인지 확인
+        const octets = ip.split('.');
+        return octets.every(octet => {
+            const num = parseInt(octet, 10);
+            return num >= 0 && num <= 255;
+        });
+    }
+
+    // IPv6는 간단히 콜론 포함 여부로 확인
+    return ip.includes(':');
 }
 
 /**
- * IP 주소를 숫자로 변환 (CIDR 계산용)
+ * IP 주소를 정수로 변환 (MySQL INET_ATON 호환)
  *
- * @param {string} ip - IP 주소
- * @returns {number} - 숫자 형태의 IP
+ * @param {string} ip - IPv4 주소
+ * @returns {number|null} 정수 형태의 IP, 실패 시 null
  */
-function ipToNumber(ip) {
-    return ip.split('.')
-        .reduce((acc, octet) => (acc << 8) + parseInt(octet), 0) >>> 0;
+export function ipToInt(ip) {
+    if (!isValidIp(ip) || ip.includes(':')) {
+        return null; // IPv6는 지원하지 않음
+    }
+
+    const octets = ip.split('.').map(o => parseInt(o, 10));
+
+    // 각 옥텟을 왼쪽으로 시프트하여 합산
+    return (octets[0] << 24) + (octets[1] << 16) + (octets[2] << 8) + octets[3];
+}
+
+/**
+ * 정수를 IP 주소로 변환 (MySQL INET_NTOA 호환)
+ *
+ * @param {number} int - 정수 형태의 IP
+ * @returns {string|null} IPv4 주소, 실패 시 null
+ */
+export function intToIp(int) {
+    if (typeof int !== 'number' || int < 0 || int > 4294967295) {
+        return null;
+    }
+
+    return [
+        (int >>> 24) & 255,
+        (int >>> 16) & 255,
+        (int >>> 8) & 255,
+        int & 255
+    ].join('.');
 }
