@@ -351,25 +351,28 @@ export async function createSign(req, res) {
 
     try {
         // 1. 환경변수 검증 (Phase 1-A 추가)
-        // 필수 환경변수가 설정되어 있는지 확인
         const env = validateEnvironment();
         console.log('[CONTROLLER DEBUG] 환경변수 검증 완료');
 
-        // 2. 암호화된 데이터 검증
-        if (!req.body || !req.body.data) {
-            console.log('암호화된 data 필드가 필요합니다.');
+        // 2. 개발 환경에서 평문 데이터 허용 여부 확인
+        const isDevelopmentPlaintext = (
+            process.env.NODE_ENV === 'development' &&
+            req.body &&
+            req.body.cate1
+        );
+
+        // 3. 암호화된 데이터 검증 (개발 환경 평문 제외)
+        if (!isDevelopmentPlaintext && (!req.body || !req.body.data)) {
             throw new Error('암호화된 data 필드가 필요합니다.');
         }
 
-        // 3. 데이터 복호화
-        // 웹서버가 service key로 암호화한 데이터를 복호화
-        // 주의: 현재는 ENCRYPTION_KEY(마스터 키)로 복호화
-        // 향후 service key별로 다른 키를 사용할 경우 수정 필요
-        if (process.env.NODE_ENV === 'development' && req.body.cate1) {
+        // 4. 데이터 복호화
+        if (isDevelopmentPlaintext) {
+            // 개발 환경: 평문 데이터 사용
             console.log('[CONTROLLER DEBUG] 개발 모드 - 암호화 건너뛰기');
             decryptedData = req.body;
         } else {
-            // 프로덕션: 암호화된 데이터 복호화
+            // 프로덕션 또는 암호화된 데이터: 복호화
             const decryptedString = decrypt(req.body.data, env.ENCRYPTION_KEY);
             decryptedData = JSON.parse(decryptedString);
         }
