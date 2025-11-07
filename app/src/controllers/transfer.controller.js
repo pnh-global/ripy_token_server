@@ -2,174 +2,134 @@
  * transfer.controller.js
  *
  * 웹 서버 전용 토큰 전송 컨트롤러
- * - API Key 검증 없음
- * - 사용자 서명 기반 전송
  */
 
-import * as TransferService from '../services/transfer.service.js';
-import { getClientIp } from '../utils/ipHelper.js';
+import {
+    createPartialTransaction,
+    finalizeAndSendTransaction,
+} from '../services/transfer.service.js';
+import { successResponse, errorResponse } from '../utils/response.js';
+import { query as dbQuery } from '../config/db.js';
 
 /**
  * POST /api/transfer/create
  * 부분 서명 트랜잭션 생성
- *
- * @param {Object} req - Express request 객체
- * @param {Object} res - Express response 객체
  */
 export async function createTransferSign(req, res) {
     try {
-        // 1. 요청 데이터 추출
         const { from_wallet, to_wallet, amount } = req.body;
+        const req_ip = req.ip || req.connection.remoteAddress;
 
-        // 2. 클라이언트 IP 주소 가져오기
-        const reqIp = getClientIp(req);
+        // 입력 검증
+        if (!from_wallet || !to_wallet || !amount) {
+            return errorResponse(res, '필수 파라미터가 누락되었습니다', 400);
+        }
 
-        // 3. 서비스 호출 - 부분 서명 트랜잭션 생성
-        const result = await TransferService.createPartialTransaction({
+        // 서비스 호출
+        const result = await createPartialTransaction({
             from_wallet,
             to_wallet,
             amount,
-            req_ip: reqIp
+            req_ip
         });
 
-        // 4. 성공 응답
-        return res.status(200).json({
-            success: true,
-            data: result,
-            timestamp: new Date().toISOString()
-        });
+        // 성공 응답
+        return successResponse(res, result, 200, '사용자 서명이 필요합니다');
 
     } catch (error) {
-        // 5. 에러 처리
-        console.error('[createTransferSign Error]', error.message);
-
-        // 에러 타입에 따른 상태 코드 결정
-        let statusCode = 500;
-
-        if (error.message.includes('필요합니다') ||
-            error.message.includes('형식') ||
-            error.message.includes('0보다 커야')) {
-            statusCode = 400; // Bad Request
-        }
-
-        return res.status(statusCode).json({
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
+        console.error('[createTransferSign Error]', error);
+        return errorResponse(res, error.message, 500);
     }
 }
 
 /**
  * POST /api/transfer/finalize
  * 최종 서명 완료 및 전송
- *
- * @param {Object} req - Express request 객체
- * @param {Object} res - Express response 객체
  */
 export async function finalizeTransferSign(req, res) {
     try {
-        // 1. 요청 데이터 추출
         const { contract_id, user_signature } = req.body;
+        const req_ip = req.ip || req.connection.remoteAddress;
 
-        // 2. 클라이언트 IP 주소 가져오기
-        const reqIp = getClientIp(req);
-
-        // 3. 서비스 호출 - 최종 서명 및 전송
-        const result = await TransferService.finalizeAndSendTransaction({
-            contract_id,
-            user_signature,
-            req_ip: reqIp
-        });
-
-        // 4. 성공 응답
-        return res.status(200).json({
-            success: true,
-            data: result,
-            timestamp: new Date().toISOString()
-        });
-
-    } catch (error) {
-        // 5. 에러 처리
-        console.error('[finalizeTransferSign Error]', error.message);
-
-        // 에러 타입에 따른 상태 코드 결정
-        let statusCode = 500;
-
-        if (error.message.includes('필요합니다')) {
-            statusCode = 400; // Bad Request
-        } else if (error.message.includes('찾을 수 없습니다')) {
-            statusCode = 404; // Not Found
-        } else if (error.message.includes('이미 처리된')) {
-            statusCode = 409; // Conflict
+        // 입력 검증
+        if (!contract_id) {
+            return errorResponse(res, '계약 ID가 필요합니다', 400);
         }
 
-        return res.status(statusCode).json({
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
+        if (!user_signature) {
+            return errorResponse(res, '사용자 서명이 필요합니다', 400);
+        }
+
+        // 서비스 호출
+        const result = await finalizeAndSendTransaction({
+            contract_id,
+            user_signature,
+            req_ip
         });
+
+        // 성공 응답
+        return successResponse(res, result, 200, '전송이 완료되었습니다');
+
+    } catch (error) {
+        console.error('[finalizeTransferSign Error]', error);
+
+        // 에러 타입별 상태 코드 결정
+        let statusCode = 500;
+
+        if (error.message.includes('계약 정보를 찾을 수 없습니다')) {
+            statusCode = 404;
+        } else if (error.message.includes('이미 처리된')) {
+            statusCode = 409;
+        } else if (error.message.includes('서명이 없습니다')) {
+            statusCode = 400;
+        } else if (error.message.includes('트랜잭션 복원 실패')) {
+            statusCode = 400;
+        } else if (error.message.includes('insufficient funds')) {
+            statusCode = 400;
+        }
+
+        return errorResponse(res, error.message, statusCode);
     }
 }
 
 /**
  * GET /api/transfer/status/:contract_id
- * 전송 상태 조회 (선택사항)
- *
- * @param {Object} req - Express request 객체
- * @param {Object} res - Express response 객체
+ * 전송 상태 조회
  */
 export async function getTransferStatus(req, res) {
     try {
-        // 1. 계약 ID 추출
         const { contract_id } = req.params;
 
+        // 입력 검증
         if (!contract_id) {
-            return res.status(400).json({
-                success: false,
-                error: '계약 ID가 필요합니다',
-                timestamp: new Date().toISOString()
-            });
+            return errorResponse(res, '계약 ID가 필요합니다', 400);
         }
 
-        // 2. DB에서 계약 정보 조회
-        const { pool } = await import('../config/db.js');
-        const [contracts] = await pool.query(
-            'SELECT contract_id, status, created_at, updated_at, tx_signature FROM r_contract WHERE contract_id = ?',
+        // DB에서 계약 조회
+        const [contracts] = await dbQuery(
+            'SELECT * FROM r_contract WHERE contract_id = ?',
             [contract_id]
         );
 
-        if (contracts.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: '계약 정보를 찾을 수 없습니다',
-                timestamp: new Date().toISOString()
-            });
+        if (!contracts || contracts.length === 0) {
+            return errorResponse(res, '계약 정보를 찾을 수 없습니다', 404);
         }
 
         const contract = contracts[0];
 
-        // 3. 성공 응답
-        return res.status(200).json({
-            success: true,
-            data: {
-                contract_id: contract.contract_id,
-                status: contract.status,
-                tx_signature: contract.tx_signature,
-                created_at: contract.created_at,
-                updated_at: contract.updated_at
-            },
-            timestamp: new Date().toISOString()
-        });
+        // 응답 데이터 구성
+        const result = {
+            contract_id: contract.contract_id,
+            status: contract.status,
+            tx_signature: contract.tx_signature || null,
+            created_at: contract.created_at,
+            updated_at: contract.updated_at
+        };
+
+        return successResponse(res, result, 200);
 
     } catch (error) {
-        // 4. 에러 처리
-        console.error('[getTransferStatus Error]', error.message);
-
-        return res.status(500).json({
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
+        console.error('[getTransferStatus Error]', error);
+        return errorResponse(res, error.message, 500);
     }
 }

@@ -1,6 +1,6 @@
 /**
  * @swagger
- * /health:
+ * /api/health:
  *   get:
  *     summary: Health check
  *     description: Returns server status and DB connection time.

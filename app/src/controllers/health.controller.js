@@ -9,7 +9,7 @@ import pool from '../config/db.js';
 
 /**
  * @swagger
- * /health:
+ * /api/health:
  *   get:
  *     summary: 서버 헬스 체크
  *     description: 서버와 데이터베이스 연결 상태를 확인합니다

@@ -7,7 +7,6 @@ import swaggerUi from 'swagger-ui-express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// ES 모듈에서 __dirname 사용하기
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -20,18 +19,23 @@ export const swaggerOptions = {
             description: `
 RIPY 토큰 서버 API 문서입니다.
 
+**Result Code 체계:**
+- FFRR 형식 (FF: 기능 코드, RR: 원인 코드)
+- 0000: 성공
+- 9900: 서버 내부 오류
+- 9800: 잘못된 요청
+- 9801: 검증 실패
+- 0702: 전송 실패 (조회 실패)
+
 **주요 기능:**
-- 부분 서명 트랜잭션 생성 (서명 요청)
+- 부분 서명 트랜잭션 생성
 - 최종 서명 완료 처리
 - 계약서 조회 및 관리
 - Solana 토큰 전송
-- 서비스 키 관리
-- 로그 조회
 
 **보안:**
-- 모든 API는 x-api-key 헤더를 통한 인증이 필요합니다.
-- 민감한 데이터는 AES-256-CBC로 암호화하여 전송합니다.
-- IP 기반 접근 제어가 가능합니다.
+- 웹 전용 API는 x-api-key 불필요
+- 앱 전용 API는 x-api-key 필수
             `,
             contact: {
                 name: 'RIPY Development Team',
@@ -44,15 +48,10 @@ RIPY 토큰 서버 API 문서입니다.
                 description: '개발 서버 (Development)'
             },
             {
-                url: 'http://localhost:4001',
-                description: '개발 테스트 서버 (Dev Test)'
-            },
-            {
                 url: 'https://api.ripy.io',
                 description: '운영 서버 (Production)'
             }
         ],
-        // 보안 스키마 정의
         components: {
             securitySchemes: {
                 ApiKeyAuth: {
@@ -61,9 +60,98 @@ RIPY 토큰 서버 API 문서입니다.
                     name: 'x-api-key',
                     description: '서비스 키 인증 (service_keys 테이블에서 발급)'
                 }
+            },
+            schemas: {
+                SuccessResponse: {
+                    type: 'object',
+                    required: ['ok', 'code', 'data'],
+                    properties: {
+                        ok: {
+                            type: 'boolean',
+                            description: '성공 여부 (항상 true)',
+                            example: true
+                        },
+                        code: {
+                            type: 'string',
+                            description: 'Result Code (FFRR 형식)',
+                            example: '0000'
+                        },
+                        message: {
+                            type: 'string',
+                            description: '응답 메시지 (선택)',
+                            example: '요청이 성공적으로 처리되었습니다'
+                        },
+                        data: {
+                            type: 'object',
+                            description: '응답 데이터',
+                            additionalProperties: true
+                        }
+                    },
+                    example: {
+                        ok: true,
+                        code: '0000',
+                        message: '사용자 서명이 필요합니다',
+                        data: {
+                            contract_id: '74b46e9b-147a-45f8-9d66-d716b0a56be7',
+                            partial_transaction: 'AQAAAAo=...'
+                        }
+                    }
+                },
+                Error: {
+                    type: 'object',
+                    required: ['ok', 'code', 'error'],
+                    properties: {
+                        ok: {
+                            type: 'boolean',
+                            description: '성공 여부 (항상 false)',
+                            example: false
+                        },
+                        code: {
+                            type: 'string',
+                            description: 'Result Code (FFRR 형식)',
+                            enum: ['9800', '9801', '9900', '0701', '0702'],
+                            example: '9800'
+                        },
+                        error: {
+                            type: 'string',
+                            description: '에러 메시지',
+                            example: '필수 파라미터가 누락되었습니다'
+                        }
+                    },
+                    example: {
+                        ok: false,
+                        code: '9800',
+                        error: '필수 파라미터가 누락되었습니다'
+                    }
+                },
+                ResultCodes: {
+                    type: 'object',
+                    description: 'Result Code 정의',
+                    properties: {
+                        '0000': {
+                            type: 'string',
+                            example: '성공 (SUCCESS)'
+                        },
+                        '9900': {
+                            type: 'string',
+                            example: '서버 내부 오류 (INTERNAL_SERVER_ERROR)'
+                        },
+                        '9800': {
+                            type: 'string',
+                            example: '잘못된 요청 (BAD_REQUEST)'
+                        },
+                        '9801': {
+                            type: 'string',
+                            example: '검증 실패 (VALIDATION_ERROR)'
+                        },
+                        '0702': {
+                            type: 'string',
+                            example: '전송 실패 - 조회 실패 (TRANSFER_NOT_FOUND)'
+                        }
+                    }
+                }
             }
         },
-        // 전역 보안 적용 (모든 API에 기본 적용)
         security: [
             {
                 ApiKeyAuth: []
@@ -75,8 +163,12 @@ RIPY 토큰 서버 API 문서입니다.
                 description: '서버 상태 체크'
             },
             {
+                name: 'Transfer (Web)',
+                description: '웹 서버 전용 토큰 전송 API (API Key 불필요)'
+            },
+            {
                 name: 'Sign (서명)',
-                description: '부분 서명 트랜잭션 생성 및 최종 서명 처리'
+                description: '부분 서명 트랜잭션 생성 및 최종 서명 처리 (API Key 필요)'
             },
             {
                 name: 'Contract (계약서)',
@@ -96,34 +188,25 @@ RIPY 토큰 서버 API 문서입니다.
             }
         ]
     },
-    // JSDoc 주석을 읽을 파일 경로
     apis: [
-        path.join(__dirname, '../routes/**/*.js'),        // config -> routes
-        path.join(__dirname, '../controllers/**/*.js')     // config -> controllers
+        path.join(__dirname, '../routes/**/*.js'),
+        path.join(__dirname, '../controllers/**/*.js')
     ]
 };
 
-/**
- * Swagger 설정 함수
- * Express 앱에 Swagger UI를 추가합니다.
- *
- * @param {Object} app - Express 앱 인스턴스
- */
 export function setupSwagger(app) {
     try {
-        // Swagger 문서 생성
         const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
         console.log('📄 Swagger 문서 생성 완료');
         console.log(`   - API 개수: ${Object.keys(swaggerSpec.paths || {}).length}`);
 
-        // Swagger UI 설정
         const swaggerUiOptions = {
             explorer: true,
             swaggerOptions: {
-                persistAuthorization: true, // API Key 입력 후 새로고침해도 유지
-                displayRequestDuration: true, // 요청 시간 표시
-                filter: true, // 검색 기능 활성화
+                persistAuthorization: true,
+                displayRequestDuration: true,
+                filter: true,
                 syntaxHighlight: {
                     activate: true,
                     theme: 'monokai'
@@ -131,10 +214,8 @@ export function setupSwagger(app) {
             }
         };
 
-        // /api-docs 경로에 Swagger UI 마운트
         app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
 
-        // Swagger JSON 엔드포인트 (선택사항)
         app.get('/api-docs.json', (req, res) => {
             res.setHeader('Content-Type', 'application/json');
             res.send(swaggerSpec);

@@ -33,4 +33,23 @@ export const pool = mysql.createPool({
     namedPlaceholders: true,
 });
 
+/**
+ * query 함수 추가
+ * - pool.query를 래핑한 헬퍼 함수
+ * - controller에서 직접 사용 가능
+ *
+ * @param {string} sql - 실행할 SQL 쿼리
+ * @param {Array} params - 쿼리 파라미터
+ * @returns {Promise} - 쿼리 실행 결과
+ */
+export async function query(sql, params) {
+    const connection = await pool.getConnection();
+    try {
+        const [rows] = await connection.query(sql, params);
+        return [rows];
+    } finally {
+        connection.release();
+    }
+}
+
 export default pool;
