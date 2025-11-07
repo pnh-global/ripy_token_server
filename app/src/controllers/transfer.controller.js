@@ -9,7 +9,7 @@ import {
     finalizeAndSendTransaction,
 } from '../services/transfer.service.js';
 import { successResponse, errorResponse } from '../utils/response.js';
-import { query as dbQuery } from '../config/db.js';
+import { pool } from '../config/db.js';  // ✅ 여기만 수정
 
 /**
  * POST /api/transfer/create
@@ -20,12 +20,10 @@ export async function createTransferSign(req, res) {
         const { from_wallet, to_wallet, amount } = req.body;
         const req_ip = req.ip || req.connection.remoteAddress;
 
-        // 입력 검증
         if (!from_wallet || !to_wallet || !amount) {
-            return errorResponse(res, '필수 파라미터가 누락되었습니다', 400);
+            return errorResponse(res, '필수 파라미터가 누락되었습니다', 400, '9800');
         }
 
-        // 서비스 호출
         const result = await createPartialTransaction({
             from_wallet,
             to_wallet,
@@ -33,12 +31,11 @@ export async function createTransferSign(req, res) {
             req_ip
         });
 
-        // 성공 응답
-        return successResponse(res, result, 200, '사용자 서명이 필요합니다');
+        return successResponse(res, result, 200, '0000', '사용자 서명이 필요합니다');
 
     } catch (error) {
         console.error('[createTransferSign Error]', error);
-        return errorResponse(res, error.message, 500);
+        return errorResponse(res, error.message, 500, '9900');
     }
 }
 
@@ -48,47 +45,43 @@ export async function createTransferSign(req, res) {
  */
 export async function finalizeTransferSign(req, res) {
     try {
-        const { contract_id, user_signature } = req.body;
+        const { contract_id, partial_transaction } = req.body;  // ✅ 파라미터 이름
         const req_ip = req.ip || req.connection.remoteAddress;
 
-        // 입력 검증
         if (!contract_id) {
-            return errorResponse(res, '계약 ID가 필요합니다', 400);
+            return errorResponse(res, '계약 ID가 필요합니다', 400, '9800');
         }
 
-        if (!user_signature) {
-            return errorResponse(res, '사용자 서명이 필요합니다', 400);
+        if (!partial_transaction) {
+            return errorResponse(res, '서명이 완료된 트랜잭션이 필요합니다', 400, '9800');
         }
 
-        // 서비스 호출
         const result = await finalizeAndSendTransaction({
             contract_id,
-            user_signature,
+            partial_transaction,  // ✅ 파라미터 이름
             req_ip
         });
 
-        // 성공 응답
-        return successResponse(res, result, 200, '전송이 완료되었습니다');
+        return successResponse(res, result, 200, '0000', '전송이 완료되었습니다');
 
     } catch (error) {
         console.error('[finalizeTransferSign Error]', error);
 
-        // 에러 타입별 상태 코드 결정
+        let code = '9900';
         let statusCode = 500;
 
         if (error.message.includes('계약 정보를 찾을 수 없습니다')) {
+            code = '0502';  // 05(지갑) + 02(NOT_FOUND)
             statusCode = 404;
         } else if (error.message.includes('이미 처리된')) {
+            code = '9800';
             statusCode = 409;
         } else if (error.message.includes('서명이 없습니다')) {
-            statusCode = 400;
-        } else if (error.message.includes('트랜잭션 복원 실패')) {
-            statusCode = 400;
-        } else if (error.message.includes('insufficient funds')) {
+            code = '9801';  // VALIDATION_ERROR
             statusCode = 400;
         }
 
-        return errorResponse(res, error.message, statusCode);
+        return errorResponse(res, error.message, statusCode, code);
     }
 }
 
@@ -100,24 +93,21 @@ export async function getTransferStatus(req, res) {
     try {
         const { contract_id } = req.params;
 
-        // 입력 검증
         if (!contract_id) {
-            return errorResponse(res, '계약 ID가 필요합니다', 400);
+            return errorResponse(res, '계약 ID가 필요합니다', 400, '9800');
         }
 
-        // DB에서 계약 조회
-        const [contracts] = await dbQuery(
+        const [contracts] = await pool.query(
             'SELECT * FROM r_contract WHERE contract_id = ?',
             [contract_id]
         );
 
         if (!contracts || contracts.length === 0) {
-            return errorResponse(res, '계약 정보를 찾을 수 없습니다', 404);
+            return errorResponse(res, '계약 정보를 찾을 수 없습니다', 404, '0502');
         }
 
         const contract = contracts[0];
 
-        // 응답 데이터 구성
         const result = {
             contract_id: contract.contract_id,
             status: contract.status,
@@ -126,10 +116,10 @@ export async function getTransferStatus(req, res) {
             updated_at: contract.updated_at
         };
 
-        return successResponse(res, result, 200);
+        return successResponse(res, result, 200, '0000');
 
     } catch (error) {
         console.error('[getTransferStatus Error]', error);
-        return errorResponse(res, error.message, 500);
+        return errorResponse(res, error.message, 500, '9900');
     }
 }

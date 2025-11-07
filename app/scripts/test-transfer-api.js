@@ -114,17 +114,17 @@ async function step1_CreatePartialTransaction() {
 
         const latency = Date.now() - startTime;
 
-        if (!response.data.success) {
+        if (!response.data || response.data.result !== 'success') {
             throw new Error('API 응답 실패: ' + JSON.stringify(response.data));
         }
 
-        const { contract_id, partial_transaction, status, message } = response.data.data;
+        const { contract_id, partial_transaction, status, message } = response.data.detail;
 
         console.log('\n[성공] 부분 서명 트랜잭션 생성 완료!');
         console.log(`  응답 시간: ${latency}ms`);
         console.log(`  Contract ID: ${contract_id}`);
         console.log(`  Status: ${status}`);
-        console.log(`  Message: ${message}`);
+        console.log(`  Message: ${response.data.message}`);
         console.log(`  Transaction Length: ${partial_transaction.length} bytes`);
 
         // 트랜잭션 파싱 및 검증
@@ -268,6 +268,8 @@ async function step3_FinalizeTransaction(contractId, signedTransaction) {
         console.log(`  API: ${API_BASE_URL}/api/transfer/finalize`);
         console.log(`  Contract ID: ${contractId}`);
         console.log(`  Signed Transaction: ${signedTransaction.length} bytes`);
+        console.log(`\n[완전히 서명된 트랜잭션 (Postman용)]`);
+        console.log(`  ${signedTransaction}`);
 
         const startTime = Date.now();
 
@@ -275,28 +277,28 @@ async function step3_FinalizeTransaction(contractId, signedTransaction) {
             `${API_BASE_URL}/api/transfer/finalize`,
             {
                 contract_id: contractId,
-                user_signature: signedTransaction
+                partial_transaction: signedTransaction
             },
             {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                timeout: 60000  // 60초 (트랜잭션 확인 대기 시간 포함)
+                timeout: 60000
             }
         );
 
         const latency = Date.now() - startTime;
 
-        if (!response.data.success) {
+        if (!response.data || response.data.result !== 'success') {
             throw new Error('API 응답 실패: ' + JSON.stringify(response.data));
         }
 
-        const { success, signature, status, message, explorer_url } = response.data.data;
+        const { success, signature, status, message, explorer_url } = response.data.detail;
 
         console.log('\n[성공] 트랜잭션 전송 완료!');
         console.log(`  응답 시간: ${latency}ms`);
         console.log(`  Status: ${status}`);
-        console.log(`  Message: ${message}`);
+        console.log(`  Message: ${response.data.message}`);
         console.log(`  Transaction Signature: ${signature}`);
 
         if (explorer_url) {
@@ -343,11 +345,11 @@ async function step4_CheckStatus(contractId) {
             }
         );
 
-        if (!response.data.success) {
+        if (!response.data || response.data.result !== 'success') {
             throw new Error('API 응답 실패: ' + JSON.stringify(response.data));
         }
 
-        const data = response.data.data;
+        const data = response.data.detail;
 
         console.log('\n[계약 정보]');
         console.log(`  Contract ID: ${data.contract_id}`);

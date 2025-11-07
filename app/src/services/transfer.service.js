@@ -384,8 +384,8 @@ export async function finalizeAndSendTransaction(params) {
     console.log('[DEBUG] ========== finalizeAndSendTransaction START ==========');
     console.log('[DEBUG] Input params:', JSON.stringify({
         contract_id: params.contract_id,
-        has_signature: !!params.user_signature,
-        signature_length: params.user_signature?.length
+        has_transaction: !!params.partial_transaction,  // ✅ 변경
+        transaction_length: params.partial_transaction?.length  // ✅ 변경
     }, null, 2));
 
     const connection_db = await pool.getConnection();
@@ -393,13 +393,13 @@ export async function finalizeAndSendTransaction(params) {
     try {
         // 1. 입력값 검증
         console.log('[DEBUG] Step 1: Validating parameters...');
-        const { contract_id, user_signature, req_ip } = params;
+        const { contract_id, partial_transaction, req_ip } = params;  // ✅ 변경
 
         if (!contract_id) {
             throw new Error('계약 ID가 필요합니다');
         }
-        if (!user_signature) {
-            throw new Error('사용자 서명이 필요합니다');
+        if (!partial_transaction) {
+            throw new Error('사용자 서명이 완료된 트랜잭션이 필요합니다');
         }
         console.log('[DEBUG] ✓ Parameters validated');
 
@@ -433,7 +433,7 @@ export async function finalizeAndSendTransaction(params) {
 
         try {
             transaction = Transaction.from(
-                Buffer.from(user_signature, 'base64')
+                Buffer.from(partial_transaction, 'base64')  // ✅ 변경
             );
             console.log('[DEBUG] ✓ Transaction deserialized');
         } catch (deserializeError) {
