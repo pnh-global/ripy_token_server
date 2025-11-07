@@ -165,19 +165,19 @@ export async function createPartialTransaction(params) {
 
         // 5.6. 수신자의 토큰 계정 존재 확인
         console.log('[DEBUG] Step 5.6: Verifying recipient token account exists...');
+        let needCreateAta = false;
+
         try {
             const toAccountInfo = await connection.getAccountInfo(toTokenAccount);
 
             if (!toAccountInfo) {
-                console.error('[ERROR] Recipient token account does not exist:', toTokenAccount.toBase58());
-                throw new Error('수신자의 RIPY 토큰 계정이 존재하지 않습니다. 수신자가 먼저 RIPY 지갑을 생성해야 합니다.');
+                console.log('[DEBUG] ⚠ Recipient token account does not exist');
+                console.log('[DEBUG] → Will create recipient token account');
+                needCreateAta = true;
+            } else {
+                console.log('[DEBUG] ✓ Recipient token account verified');
             }
-
-            console.log('[DEBUG] ✓ Recipient token account verified');
         } catch (accountCheckError) {
-            if (accountCheckError.message.includes('수신자의 RIPY 토큰 계정이 존재하지 않습니다')) {
-                throw accountCheckError;
-            }
             console.error('[ERROR] Failed to verify recipient token account:', accountCheckError);
             throw new Error(`수신자 토큰 계정 확인 실패: ${accountCheckError.message}`);
         }
@@ -186,7 +186,24 @@ export async function createPartialTransaction(params) {
         console.log('[DEBUG] Step 6: Creating transaction...');
         const transaction = new Transaction();
 
-        // SPL 토큰 전송 instruction 추가
+        // 6.1. ATA 생성이 필요하면 instruction 추가
+        if (needCreateAta) {
+            console.log('[DEBUG] Step 6.1: Adding create ATA instruction...');
+            const { createAssociatedTokenAccountInstruction } = await import('@solana/spl-token');
+
+            const createAtaIx = createAssociatedTokenAccountInstruction(
+                feepayerKeypair.publicKey,  // payer (회사가 생성 비용 지불)
+                toTokenAccount,              // associatedToken
+                toPubkey,                    // owner
+                RIPY_TOKEN_MINT             // mint
+            );
+
+            transaction.add(createAtaIx);
+            console.log('[DEBUG] ✓ Create ATA instruction added');
+        }
+
+        // 6.2. SPL 토큰 전송 instruction 추가
+        console.log('[DEBUG] Step 6.2: Adding transfer instruction...');
         transaction.add(
             createTransferInstruction(
                 fromTokenAccount,      // 발신자 토큰 계정
@@ -232,76 +249,68 @@ export async function createPartialTransaction(params) {
         // 9. 트랜잭션을 Base64로 직렬화
         console.log('[DEBUG] Step 9: Serializing transaction...');
         const serializedTransaction = transaction.serialize({
-            requireAllSignatures: false,  // 부분 서명 허용
+            requireAllSignatures: false,
             verifySignatures: false
         }).toString('base64');
         console.log('[DEBUG] ✓ Transaction serialized, length:', serializedTransaction.length);
 
-        // 10. 지갑 주소 암호화
-        console.log('[DEBUG] Step 10: Encrypting wallet addresses...');
+        // 10. DB 트랜잭션 시작
+        console.log('[DEBUG] Step 10: Starting DB transaction...');
+        await connection_db.beginTransaction();
+
+        // 11. r_contract 테이블에 저장
+        console.log('[DEBUG] Step 11: Inserting into r_contract...');
+
+        // 데이터 암호화
         const encryptedFromWallet = encrypt(from_wallet);
         const encryptedToWallet = encrypt(to_wallet);
-        console.log('[DEBUG] ✓ Wallet addresses encrypted');
+        const encryptedContractData = encrypt(serializedTransaction);
 
-        // 11. 트랜잭션 데이터 암호화
-        console.log('[DEBUG] Step 11: Encrypting transaction data...');
-        const encryptedTransaction = encrypt(serializedTransaction);
-        console.log('[DEBUG] ✓ Transaction encrypted');
-
-        // 12. IP 주소 처리
-        console.log('[DEBUG] Step 12: Processing IP address...');
         const ipInt = req_ip ? `INET_ATON('${req_ip}')` : null;
-        const ipText = req_ip || null;
-        console.log('[DEBUG] ✓ IP processed:', ipText);
 
-        // 13. DB 트랜잭션 시작
-        console.log('[DEBUG] Step 13: Starting DB transaction...');
-        await connection_db.beginTransaction();
-        console.log('[DEBUG] ✓ DB transaction started');
-
-        // 14. r_contract 테이블에 저장
-        console.log('[DEBUG] Step 14: Inserting into r_contract...');
-        const insertContractQuery = `
+        await connection_db.query(`
             INSERT INTO r_contract (
                 contract_id,
                 cate1,
                 cate2,
-                from_wallet_address,
-                to_wallet_address,
-                req_amount,
+                owner_id,
+                wallet_address,
+                target_address,
+                amount,
                 contract_data,
+                status,
                 req_ip,
                 req_ip_text,
-                status,
                 created_at
             ) VALUES (
                          :contract_id,
-                         'web_transfer',
-                         'user_sign',
-                         :from_wallet,
-                         :to_wallet,
+                         1,
+                         1,
+                         :owner_id,
+                         :wallet_address,
+                         :target_address,
                          :amount,
                          :contract_data,
+                         'pending',
                          ${ipInt ? ipInt : 'NULL'},
                          :req_ip_text,
-                         'pending',
                          NOW()
                      )
-        `;
-
-        await connection_db.query(insertContractQuery, {
+        `, {
             contract_id: contractId,
-            from_wallet: encryptedFromWallet,
-            to_wallet: encryptedToWallet,
+            owner_id: from_wallet,
+            wallet_address: encryptedFromWallet,
+            target_address: encryptedToWallet,
             amount: amount,
-            contract_data: encryptedTransaction,
-            req_ip_text: ipText
+            contract_data: encryptedContractData,
+            req_ip_text: req_ip || null
         });
+
         console.log('[DEBUG] ✓ Contract inserted');
 
-        // 15. r_log 테이블에 기록
-        console.log('[DEBUG] Step 15: Inserting into r_log...');
-        const insertLogQuery = `
+        // 12. r_log 기록
+        console.log('[DEBUG] Step 12: Inserting into r_log...');
+        await connection_db.query(`
             INSERT INTO r_log (
                 cate1,
                 cate2,
@@ -310,6 +319,7 @@ export async function createPartialTransaction(params) {
                 req_ip_text,
                 req_status,
                 api_name,
+                api_parameter,
                 created_at
             ) VALUES (
                          'web_transfer',
@@ -319,23 +329,25 @@ export async function createPartialTransaction(params) {
                          :req_ip_text,
                          'Y',
                          '/api/transfer/create',
+                         :api_parameter,
                          NOW()
                      )
-        `;
-
-        await connection_db.query(insertLogQuery, {
+        `, {
             request_id: contractId,
-            req_ip_text: ipText
+            req_ip_text: req_ip || null,
+            api_parameter: JSON.stringify({ from_wallet, to_wallet, amount })
         });
+
         console.log('[DEBUG] ✓ Log inserted');
 
-        // 16. 커밋
-        console.log('[DEBUG] Step 16: Committing transaction...');
+        // 13. 커밋
+        console.log('[DEBUG] Step 13: Committing transaction...');
         await connection_db.commit();
         console.log('[DEBUG] ✓ Transaction committed');
 
-        // 17. 결과 반환
         console.log('[DEBUG] ========== createPartialTransaction SUCCESS ==========');
+
+        // 14. 결과 반환
         return {
             contract_id: contractId,
             partial_transaction: serializedTransaction,
