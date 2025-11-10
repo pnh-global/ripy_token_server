@@ -21,7 +21,7 @@
 // Mock 설정
 // ==========================================
 
-const USE_MOCK = process.env.NODE_ENV === 'test' || process.env.USE_SOLANA_MOCK !== 'false';
+const USE_MOCK = process.env.NODE_ENV === 'test' || process.env.USE_SOLANA_MOCK === 'true';
 console.log('[TRANSACTION SERVICE] USE_MOCK:', USE_MOCK, 'NODE_ENV:', process.env.NODE_ENV);
 
 // ==========================================

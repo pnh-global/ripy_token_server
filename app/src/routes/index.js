@@ -6,6 +6,7 @@ import signRouter from "./sign.routes.js";
 import contractRouter from "./contract.routes.js";
 import logRouter from "./log.routes.js";
 import transferRouter from "./transfer.routes.js";
+import companySendRouter from "./companySend.routes.js";
 
 const router = Router();
 
@@ -38,5 +39,6 @@ router.use("/sign", signRouter);
 router.use("/contract", contractRouter);
 router.use("/log", logRouter);
 router.use("/transfer", transferRouter);
+router.use("/companysend", companySendRouter);
 
 export default router;

@@ -178,6 +178,69 @@ export async function processCompanySend(request_id, reqMeta) {
     }
 }
 
+/**
+ * 회사 지갑에서 토큰 전송 - Company Send API 전용
+ * 새로운 다중 전송 API에서 사용
+ *
+ * @param {Object} params
+ * @param {string} params.toAddressEncrypted - 암호화된 수신자 주소
+ * @param {number} params.amount - 전송할 RIPY 토큰 수량
+ * @returns {Promise<Object>} { success, txid, code, error }
+ */
+async function transferTokenFromCompanySend({ toAddressEncrypted, amount }) {
+    try {
+        // 1. 암호화된 주소 복호화
+        const masterKey = process.env.ENCRYPTION_KEY;
+        if (!masterKey) {
+            throw new Error('ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
+        }
+
+        const toAddress = decrypt(toAddressEncrypted, masterKey);
+
+        // 2. 회사 지갑 주소 가져오기 (Company Send 전용 환경변수)
+        const companyAddress = process.env.COMPANY_SEND_WALLET_ADDRESS;
+        if (!companyAddress) {
+            throw new Error('COMPANY_SEND_WALLET_ADDRESS 환경변수가 설정되지 않았습니다.');
+        }
+
+        console.log('[SEND SERVICE] Company Send - 회사 지갑 주소:', companyAddress);
+
+        // 3. 부분 서명 트랜잭션 생성 (회사가 Fee Payer이자 발신자)
+        const partialTx = await createPartialSignedTransaction({
+            fromPubkey: companyAddress,
+            toPubkey: toAddress,
+            amount: amount
+        });
+
+        // 4. 회사 지갑이 발신자이자 Fee Payer이므로
+        //    추가 서명 없이 바로 전송 가능
+        //    (실제로는 이미 partialSign에서 회사 서명 완료)
+
+        // 5. 트랜잭션 전송
+        const result = await sendTransaction({
+            serialized: partialTx.serialized
+        });
+
+        // 6. 성공 반환
+        return {
+            success: true,
+            txid: result.signature,
+            code: "200",
+            error: null
+        };
+
+    } catch (error) {
+        console.error('[SEND SERVICE] Company Send 토큰 전송 실패:', error);
+
+        return {
+            success: false,
+            txid: null,
+            code: "500",
+            error: error.message
+        };
+    }
+}
+
 /** 상태 조회용 */
 export async function getCompanySendStatus(request_id) {
     return getRequestStatus(request_id);

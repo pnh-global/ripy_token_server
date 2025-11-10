@@ -1,45 +1,52 @@
 /**
  * create-service-key.js
- * UTF-8 문제 해결을 위한 서비스 키 생성 스크립트
+ * Service Key 생성 스크립트
+ *
+ * 사용법:
+ * - 랜덤 키 생성: node scripts/create-service-key.js
+ * - 테스트 키 생성: node scripts/create-service-key.js --test
  */
 
+import { executeQuery } from '../src/config/db.js';
 import { pool } from '../src/config/db.js';
 import crypto from 'crypto';
 
-// 원본 API Key
-const originalKey = 'test-api-key-12345';
+// 명령줄 인자 확인
+const isTestMode = process.argv.includes('--test');
 
-// SHA-256 해시 계산
-const keyHash = crypto.createHash('sha256')
-    .update(originalKey)
-    .digest('hex')
-    .toUpperCase();
-
-const keyLast4 = originalKey.slice(-4);
-
-console.log('='.repeat(60));
-console.log('서비스 키 생성');
-console.log('='.repeat(60));
-console.log('원본 API Key:', originalKey);
-console.log('계산된 Hash:', keyHash);
-console.log('Last 4:', keyLast4);
-console.log('='.repeat(60));
-
-async function createKey() {
+async function createServiceKey() {
     try {
-        // DB 연결 charset 확인
-        const [charsetRows] = await pool.execute(
-            'SHOW VARIABLES LIKE "character%"'
-        );
-        console.log('\n=== 현재 DB 문자셋 ===');
-        charsetRows.forEach(row => {
-            console.log(`${row.Variable_name}: ${row.Value}`);
-        });
+        // 1. API Key 생성
+        let originalKey;
+        if (isTestMode) {
+            // 테스트 모드: 고정된 키
+            originalKey = 'test-api-key-12345';
+            console.log('\n🧪 테스트 모드: 고정된 키를 사용합니다.');
+        } else {
+            // 운영 모드: 랜덤 키 생성
+            originalKey = crypto.randomBytes(32).toString('hex');
+            console.log('\n🔐 운영 모드: 랜덤 키를 생성합니다.');
+        }
+
+        // 2. SHA-256 해시 계산
+        const keyHash = crypto.createHash('sha256')
+            .update(originalKey)
+            .digest('hex')
+            .toUpperCase();
+
+        const keyLast4 = originalKey.slice(-4);
+
+        console.log('='.repeat(60));
+        console.log('서비스 키 생성');
+        console.log('='.repeat(60));
+        console.log('원본 API Key:', originalKey);
+        console.log('계산된 Hash:', keyHash);
+        console.log('Last 4:', keyLast4);
         console.log('='.repeat(60));
 
-        // 서비스 키 삽입
-        const [result] = await pool.execute(
-            `INSERT INTO service_keys (
+        // 3. DB에 저장
+        const sql = `
+            INSERT INTO service_keys (
                 req_ip_text,
                 req_server,
                 key_hash,
@@ -48,26 +55,40 @@ async function createKey() {
                 status,
                 scopes,
                 allow_cidrs,
-                allow_hosts
-            ) VALUES (?, ?, UNHEX(?), ?, ?, ?, ?, ?, ?)`,
-            [
-                'localhost',
-                'test-server',
-                keyHash,  // HEX 문자열을 UNHEX()로 VARBINARY로 변환
-                originalKey,
-                keyLast4,
+                allow_hosts,
+                created_at,
+                updated_at
+            ) VALUES (
+                :req_ip_text,
+                :req_server,
+                UNHEX(:key_hash),
+                :key_ciphertext,
+                :key_last4,
                 'ACTIVE',
-                JSON.stringify(['read', 'write']),
-                JSON.stringify([]),  // 모든 IP 허용
-                JSON.stringify([])
-            ]
-        );
+                :scopes,
+                :allow_cidrs,
+                :allow_hosts,
+                NOW(),
+                NOW()
+            )
+        `;
+
+        const [result] = await executeQuery(sql, {
+            req_ip_text: 'localhost',
+            req_server: isTestMode ? 'test-server' : 'CompanySend_WebServer',
+            key_hash: keyHash,
+            key_ciphertext: originalKey,
+            key_last4: keyLast4,
+            scopes: JSON.stringify(['read', 'write']),
+            allow_cidrs: JSON.stringify([]),  // 모든 IP 허용
+            allow_hosts: JSON.stringify([])
+        });
 
         console.log('\n✅ 서비스 키 생성 완료!');
         console.log('- idx:', result.insertId);
         console.log('='.repeat(60));
 
-        // 검증: 방금 삽입한 데이터 확인
+        // 4. 검증
         const [verifyRows] = await pool.execute(
             `SELECT 
                 idx,
@@ -83,40 +104,31 @@ async function createKey() {
         console.log('\n=== 삽입된 데이터 검증 ===');
         console.log('idx:', verifyRows[0].idx);
         console.log('key_hash (HEX):', verifyRows[0].key_hash_hex);
-        console.log('key_ciphertext:', verifyRows[0].key_ciphertext);
         console.log('key_last4:', verifyRows[0].key_last4);
         console.log('status:', verifyRows[0].status);
-        console.log('='.repeat(60));
 
-        // 일치 확인
         if (verifyRows[0].key_hash_hex === keyHash) {
             console.log('\n✅ 해시값 일치! 정상 저장됨');
         } else {
             console.log('\n❌ 해시값 불일치!');
-            console.log('저장됨:', verifyRows[0].key_hash_hex);
-            console.log('예상값:', keyHash);
         }
         console.log('='.repeat(60));
 
-        // verifyServiceKey 테스트
-        console.log('\n=== verifyServiceKey 테스트 ===');
-        const [testRows] = await pool.execute(
-            `SELECT idx, status FROM service_keys WHERE key_hash = UNHEX(?) LIMIT 1`,
-            [keyHash]
-        );
-
-        if (testRows.length > 0) {
-            console.log('✅ verifyServiceKey 성공! idx:', testRows[0].idx);
-        } else {
-            console.log('❌ verifyServiceKey 실패!');
-        }
-        console.log('='.repeat(60));
-
-        console.log('\n=== API 호출 예시 ===');
-        console.log(`curl -X POST http://localhost:4001/api/sign/create \\`);
+        // 5. API 호출 예시
+        console.log('\n=== API 테스트 명령어 ===');
+        console.log(`curl -X POST http://localhost:4000/api/companysend \\`);
         console.log(`  -H "Content-Type: application/json" \\`);
-        console.log(`  -H "X-API-Key: ${originalKey}" \\`);
-        console.log(`  -d '{"cate1":"reward","cate2":"event","sender":"addr1","recipient":"addr2","ripy":"100.5"}'`);
+        console.log(`  -H "x-api-key: ${originalKey}" \\`);
+        console.log(`  -d '{`);
+        console.log(`    "cate1": "company_send",`);
+        console.log(`    "cate2": "test_20251110",`);
+        console.log(`    "recipients": [`);
+        console.log(`      {`);
+        console.log(`        "wallet_address": "AiF7NdJKaDxHsfnRzKKH2SR1GJ2u8upvnnVSsrPEikgw",`);
+        console.log(`        "amount": 0.1`);
+        console.log(`      }`);
+        console.log(`    ]`);
+        console.log(`  }'`);
         console.log('='.repeat(60));
 
         await pool.end();
@@ -124,11 +136,11 @@ async function createKey() {
 
     } catch (error) {
         console.error('\n❌ 에러 발생:', error.message);
-        console.error(error);
+        console.error(error.stack);
         await pool.end();
         process.exit(1);
     }
 }
 
 // 실행
-createKey();
+createServiceKey();
