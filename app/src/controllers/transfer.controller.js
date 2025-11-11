@@ -9,21 +9,82 @@ import {
     finalizeAndSendTransaction,
 } from '../services/transfer.service.js';
 import { successResponse, errorResponse } from '../utils/response.js';
-import { pool } from '../config/db.js';  // ✅ 여기만 수정
+import { pool } from '../config/db.js';
+import {
+    SUCCESS,
+    BAD_REQUEST,
+    VALIDATION_ERROR,
+    TRANSFER_CREATE_FAILED,
+    TRANSFER_NOT_FOUND,
+    INTERNAL_SERVER_ERROR
+} from '../utils/resultCodes.js';
 
 /**
  * POST /api/transfer/create
- * 부분 서명 트랜잭션 생성
+ * 부분 서명 트랜잭션 생성 (1단계)
+ *
+ * @swagger
+ * /api/transfer/create:
+ *   post:
+ *     summary: 부분 서명 트랜잭션 생성
+ *     tags:
+ *       - Transfer (Web)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - from_wallet
+ *               - to_wallet
+ *               - amount
+ *             properties:
+ *               from_wallet:
+ *                 type: string
+ *                 description: 발신자 지갑 주소
+ *               to_wallet:
+ *                 type: string
+ *                 description: 수신자 지갑 주소
+ *               amount:
+ *                 type: number
+ *                 description: 전송할 토큰 수량
+ *     responses:
+ *       200:
+ *         description: 트랜잭션 생성 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "0000"
+ *                 message:
+ *                   type: string
+ *                   example: "사용자 서명이 필요합니다"
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: 잘못된 요청
+ *       500:
+ *         description: 서버 내부 오류
  */
+
 export async function createTransferSign(req, res) {
     try {
         const { from_wallet, to_wallet, amount } = req.body;
         const req_ip = req.ip || req.connection.remoteAddress;
 
+        // 필수 파라미터 검증
         if (!from_wallet || !to_wallet || !amount) {
-            return errorResponse(res, '필수 파라미터가 누락되었습니다', 400, '9800');
+            return errorResponse(res, '필수 파라미터가 누락되었습니다', 400, BAD_REQUEST);
         }
 
+        // 부분 서명 트랜잭션 생성
         const result = await createPartialTransaction({
             from_wallet,
             to_wallet,
@@ -35,7 +96,19 @@ export async function createTransferSign(req, res) {
 
     } catch (error) {
         console.error('[createTransferSign Error]', error);
-        return errorResponse(res, error.message, 500, '9900');
+
+        // 트랜잭션 생성 실패
+        if (error.message.includes('트랜잭션 생성') || error.message.includes('생성 실패')) {
+            return errorResponse(res, error.message, 500, TRANSFER_CREATE_FAILED);
+        }
+
+        // 검증 오류
+        if (error.message.includes('유효하지 않은') || error.message.includes('검증')) {
+            return errorResponse(res, error.message, 400, VALIDATION_ERROR);
+        }
+
+        // 기타 서버 오류
+        return errorResponse(res, error.message, 500, INTERNAL_SERVER_ERROR);
     }
 }
 

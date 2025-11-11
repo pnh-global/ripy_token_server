@@ -5,37 +5,88 @@
  *
  * RIPY 서버 전체에서 사용하는 표준 응답 코드
  *
- * 코드 체계:
- * - 0000: 성공
- * - 99XX: 서버/시스템 오류
- * - 98XX: 클라이언트 요청 오류
- * - 07XX: 전송 관련 오류
+ * 코드 체계: CODEFFRR
+ * - CODE: 구분용 문자열 (고정)
+ * - FF: 기능 코드 (숫자 2자리)
+ * - RR: 원인 코드 (숫자 2자리)
  *
  * 작성일: 2025-11-11
  */
 
-// 성공 코드
-export const SUCCESS = '0000';
+// ========================================
+// 공통 코드 (00, 10)
+// ========================================
 
-// 서버 오류 (99XX)
-export const INTERNAL_SERVER_ERROR = '9900';
+// 성공
+export const SUCCESS = 'CODE0000';
 
-// 클라이언트 요청 오류 (98XX)
-export const BAD_REQUEST = '9800';
-export const VALIDATION_ERROR = '9801';
+// 시스템 오류
+export const INTERNAL_SERVER_ERROR = 'CODE9999';
 
-// 전송 관련 오류 (07XX)
-export const TRANSFER_CREATE_FAILED = '0701';  // 전송 실패 - 생성 실패
-export const TRANSFER_NOT_FOUND = '0702';      // 전송 실패 - 조회 실패
+// 공통 에러 (10XX)
+export const BAD_REQUEST = 'CODE1000';           // 잘못된 요청
+export const PERMISSION_DENIED = 'CODE1003';     // 권한 부족
+export const NOT_FOUND = 'CODE1004';             // 조회 실패
+export const DUPLICATE_ENTRY = 'CODE1009';       // 이미 등록된 데이터
 
+// ========================================
+// 토큰 코드 (11XX)
+// ========================================
+
+// 액세스 토큰 관련
+export const ACCESS_TOKEN_MISSING = 'CODE1101';      // 액세스 토큰이 없음
+export const ACCESS_TOKEN_INVALID = 'CODE1102';      // 유효하지 않은 액세스 토큰
+export const ACCESS_TOKEN_MISMATCH = 'CODE1103';     // 액세스 토큰 정보 불일치
+
+// 리프레시 토큰 관련
+export const REFRESH_TOKEN_MISSING = 'CODE1111';     // 리프레시 토큰이 없음
+export const REFRESH_TOKEN_INVALID = 'CODE1112';     // 유효하지 않은 리프레시 토큰
+export const REFRESH_TOKEN_MISMATCH = 'CODE1113';    // 리프레시 토큰 정보 불일치
+
+// ========================================
+// 유저 코드 (13XX)
+// ========================================
+
+export const USER_ALREADY_EXISTS = 'CODE1302';       // 이미 가입된 사용자
+
+// ========================================
+// 약관 코드 (14XX)
+// ========================================
+// 추후 정의
+
+// ========================================
+// 지갑 코드 (15XX)
+// ========================================
+// 추후 정의
+
+// ========================================
+// 주소록 코드 (16XX)
+// ========================================
+// 추후 정의
+
+// ========================================
 // 코드 설명 매핑
+// ========================================
+
 export const CODE_MESSAGES = {
-    '0000': '성공',
-    '9900': '서버 내부 오류',
-    '9800': '잘못된 요청',
-    '9801': '검증 실패',
-    '0701': '전송 실패 - 생성 실패',
-    '0702': '전송 실패 - 조회 실패'
+    // 공통
+    'CODE0000': '성공',
+    'CODE9999': '시스템 오류 (서버 오류)',
+    'CODE1000': '잘못된 요청',
+    'CODE1003': '권한 부족',
+    'CODE1004': '조회 실패',
+    'CODE1009': '이미 등록된 데이터입니다',
+
+    // 토큰
+    'CODE1101': '액세스 토큰이 없음',
+    'CODE1102': '유효하지 않은 액세스 토큰',
+    'CODE1103': '액세스 토큰 정보가 일치하지 않음',
+    'CODE1111': '리프레시 토큰이 없음',
+    'CODE1112': '유효하지 않은 리프레시 토큰',
+    'CODE1113': '리프레시 토큰 정보가 일치하지 않음',
+
+    // 유저
+    'CODE1302': '이미 가입되어 있는 사용자'
 };
 
 /**
@@ -46,6 +97,32 @@ export const CODE_MESSAGES = {
  */
 export function getCodeMessage(code) {
     return CODE_MESSAGES[code] || '알 수 없는 오류';
+}
+
+/**
+ * HTTP 상태 코드 매핑
+ *
+ * @param {string} code - Result Code
+ * @returns {number} HTTP 상태 코드
+ */
+export function getHttpStatus(code) {
+    const statusMap = {
+        'CODE0000': 200,  // 성공
+        'CODE1000': 400,  // 잘못된 요청
+        'CODE1003': 403,  // 권한 부족
+        'CODE1004': 404,  // 조회 실패
+        'CODE1009': 409,  // 중복 데이터
+        'CODE1101': 401,  // 액세스 토큰 없음
+        'CODE1102': 401,  // 유효하지 않은 액세스 토큰
+        'CODE1103': 401,  // 액세스 토큰 불일치
+        'CODE1111': 401,  // 리프레시 토큰 없음
+        'CODE1112': 401,  // 유효하지 않은 리프레시 토큰
+        'CODE1113': 401,  // 리프레시 토큰 불일치
+        'CODE1302': 409,  // 이미 가입된 사용자
+        'CODE9999': 500   // 시스템 오류
+    };
+
+    return statusMap[code] || 500;
 }
 
 /**
