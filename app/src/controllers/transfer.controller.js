@@ -13,13 +13,10 @@ import { pool } from '../config/db.js';
 import {
     SUCCESS,
     BAD_REQUEST,
-    VALIDATION_ERROR,
-    TRANSFER_CREATE_FAILED,
-    TRANSFER_NOT_FOUND,
+    NOT_FOUND,
     INTERNAL_SERVER_ERROR
 } from '../utils/resultCodes.js';
-
-/**
+/*
  * POST /api/transfer/create
  * 부분 서명 트랜잭션 생성 (1단계)
  *
@@ -57,23 +54,48 @@ import {
  *             schema:
  *               type: object
  *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: true
+ *                 result:
+ *                   type: string
+ *                   example: "success"
  *                 code:
  *                   type: string
- *                   example: "0000"
+ *                   example: "CODE0000"
  *                 message:
  *                   type: string
  *                   example: "사용자 서명이 필요합니다"
- *                 data:
+ *                 detail:
  *                   type: object
  *       400:
  *         description: 잘못된 요청
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 result:
+ *                   type: string
+ *                   example: "fail"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE1000"
+ *                 message:
+ *                   type: string
  *       500:
  *         description: 서버 내부 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 result:
+ *                   type: string
+ *                   example: "fail"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE9999"
+ *                 message:
+ *                   type: string
  */
-
 export async function createTransferSign(req, res) {
     try {
         const { from_wallet, to_wallet, amount } = req.body;
@@ -92,19 +114,14 @@ export async function createTransferSign(req, res) {
             req_ip
         });
 
-        return successResponse(res, result, 200, '0000', '사용자 서명이 필요합니다');
+        return successResponse(res, result, 200, SUCCESS, '사용자 서명이 필요합니다');
 
     } catch (error) {
         console.error('[createTransferSign Error]', error);
 
         // 트랜잭션 생성 실패
-        if (error.message.includes('트랜잭션 생성') || error.message.includes('생성 실패')) {
-            return errorResponse(res, error.message, 500, TRANSFER_CREATE_FAILED);
-        }
-
-        // 검증 오류
         if (error.message.includes('유효하지 않은') || error.message.includes('검증')) {
-            return errorResponse(res, error.message, 400, VALIDATION_ERROR);
+            return errorResponse(res, error.message, 400, BAD_REQUEST);
         }
 
         // 기타 서버 오류
@@ -118,43 +135,40 @@ export async function createTransferSign(req, res) {
  */
 export async function finalizeTransferSign(req, res) {
     try {
-        const { contract_id, partial_transaction } = req.body;  // ✅ 파라미터 이름
+        const { contract_id, partial_transaction } = req.body;
         const req_ip = req.ip || req.connection.remoteAddress;
 
         if (!contract_id) {
-            return errorResponse(res, '계약 ID가 필요합니다', 400, '9800');
+            return errorResponse(res, '계약 ID가 필요합니다', 400, BAD_REQUEST);
         }
 
         if (!partial_transaction) {
-            return errorResponse(res, '서명이 완료된 트랜잭션이 필요합니다', 400, '9800');
+            return errorResponse(res, '서명이 완료된 트랜잭션이 필요합니다', 400, BAD_REQUEST);
         }
 
         const result = await finalizeAndSendTransaction({
             contract_id,
-            partial_transaction,  // ✅ 파라미터 이름
+            partial_transaction,
             req_ip
         });
 
-        return successResponse(res, result, 200, '0000', '전송이 완료되었습니다');
+        return successResponse(res, result, 200, SUCCESS, '전송이 완료되었습니다');
 
     } catch (error) {
         console.error('[finalizeTransferSign Error]', error);
 
-        let code = '9900';
-        let statusCode = 500;
-
-        if (error.message.includes('계약 정보를 찾을 수 없습니다')) {
-            code = '0502';  // 05(지갑) + 02(NOT_FOUND)
-            statusCode = 404;
-        } else if (error.message.includes('이미 처리된')) {
-            code = '9800';
-            statusCode = 409;
-        } else if (error.message.includes('서명이 없습니다')) {
-            code = '9801';  // VALIDATION_ERROR
-            statusCode = 400;
+        // 계약 정보를 찾을 수 없음
+        if (error.message.includes('계약 정보를 찾을 수 없습니다') || error.message.includes('찾을 수 없')) {
+            return errorResponse(res, error.message, 404, NOT_FOUND);
         }
 
-        return errorResponse(res, error.message, statusCode, code);
+        // 이미 처리된 트랜잭션 또는 서명 검증 오류
+        if (error.message.includes('이미 처리된') || error.message.includes('서명')) {
+            return errorResponse(res, error.message, 400, BAD_REQUEST);
+        }
+
+        // 기타 서버 오류
+        return errorResponse(res, error.message, 500, INTERNAL_SERVER_ERROR);
     }
 }
 
@@ -166,21 +180,25 @@ export async function getTransferStatus(req, res) {
     try {
         const { contract_id } = req.params;
 
+        // contract_id 검증
         if (!contract_id) {
-            return errorResponse(res, '계약 ID가 필요합니다', 400, '9800');
+            return errorResponse(res, '계약 ID가 필요합니다', 400, BAD_REQUEST);
         }
 
+        // 계약 정보 조회
         const [contracts] = await pool.query(
             'SELECT * FROM r_contract WHERE contract_id = ?',
             [contract_id]
         );
 
+        // 계약 정보가 없는 경우
         if (!contracts || contracts.length === 0) {
-            return errorResponse(res, '계약 정보를 찾을 수 없습니다', 404, '0502');
+            return errorResponse(res, '계약 정보를 찾을 수 없습니다', 404, NOT_FOUND);
         }
 
         const contract = contracts[0];
 
+        // 응답 데이터 구성
         const result = {
             contract_id: contract.contract_id,
             status: contract.status,
@@ -189,10 +207,10 @@ export async function getTransferStatus(req, res) {
             updated_at: contract.updated_at
         };
 
-        return successResponse(res, result, 200, '0000');
+        return successResponse(res, result, 200, SUCCESS);
 
     } catch (error) {
         console.error('[getTransferStatus Error]', error);
-        return errorResponse(res, error.message, 500, '9900');
+        return errorResponse(res, error.message, 500, INTERNAL_SERVER_ERROR);
     }
 }

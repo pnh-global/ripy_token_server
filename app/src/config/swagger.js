@@ -207,7 +207,10 @@ RIPY 토큰 서버 API 문서입니다.
     },
     apis: [
         path.join(__dirname, '../routes/**/*.js'),
-        path.join(__dirname, '../controllers/**/*.js')
+        path.join(__dirname, '../controllers/**/health.controller.js'),
+        path.join(__dirname, '../controllers/**/companySend.controller.js'),
+        path.join(__dirname, '../controllers/**/log.controller.js'),
+        // path.join(__dirname, '../controllers/**/*.js')
     ]
 };
 

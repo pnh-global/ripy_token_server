@@ -14,7 +14,12 @@
 
 import { writeLog, getRecentLogs } from "../services/log.service.js";
 import { getLogById as getLogByIdFromModel } from "../models/log.model.js";
-
+import {
+    SUCCESS,
+    BAD_REQUEST,
+    NOT_FOUND,
+    INTERNAL_SERVER_ERROR
+} from '../utils/resultCodes.js';
 /**
  * @swagger
  * /api/log:
@@ -66,7 +71,7 @@ import { getLogById as getLogByIdFromModel } from "../models/log.model.js";
  *               result_code:
  *                 type: string
  *                 description: 결과 코드
- *                 example: "200"
+ *                 example: "CODE0000"
  *               latency_ms:
  *                 type: integer
  *                 description: 응답 시간 (밀리초)
@@ -94,13 +99,16 @@ import { getLogById as getLogByIdFromModel } from "../models/log.model.js";
  *             schema:
  *               type: object
  *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: true
+ *                 result:
+ *                   type: string
+ *                   example: "success"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE0000"
  *                 message:
  *                   type: string
  *                   example: "log inserted successfully"
- *                 data:
+ *                 detail:
  *                   type: object
  *                   properties:
  *                     idx:
@@ -116,28 +124,37 @@ import { getLogById as getLogByIdFromModel } from "../models/log.model.js";
  *             schema:
  *               type: object
  *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: false
- *                 error:
+ *                 result:
+ *                   type: string
+ *                   example: "fail"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE9999"
+ *                 message:
  *                   type: string
  *                   example: "Failed to insert log"
+ *                 detail:
+ *                   type: object
  */
 export const createLog = async (req, res, next) => {
     try {
         // req 객체를 직접 전달 (log.service.js에서 req.headers, req.ip 사용)
         const result = await writeLog(req, req.body);
         return res.status(201).json({
-            ok: true,
+            result: "success",
+            code: SUCCESS,
             message: "log inserted successfully",
-            data: result,
+            detail: result,
         });
     } catch (err) {
         console.error("createLog Error:", err);
         return res.status(500).json({
-            ok: false,
-            error: "Failed to insert log",
-            details: err.message,
+            result: "fail",
+            code: INTERNAL_SERVER_ERROR,
+            message: "Failed to insert log",
+            detail: {
+                error: err.message
+            }
         });
     }
 };
@@ -166,8 +183,8 @@ export const createLog = async (req, res, next) => {
  *           minimum: 1
  *           maximum: 100
  *           default: 20
- *           example: 20
  *         description: 조회할 로그 개수
+ *         example: 20
  *     responses:
  *       200:
  *         description: 로그 목록 조회 성공
@@ -176,44 +193,50 @@ export const createLog = async (req, res, next) => {
  *             schema:
  *               type: object
  *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: true
- *                 count:
- *                   type: integer
- *                   description: 조회된 로그 개수
- *                   example: 20
- *                 data:
- *                   type: array
- *                   description: 로그 목록
- *                   items:
- *                     type: object
- *                     properties:
- *                       idx:
- *                         type: integer
- *                         example: 123
- *                       cate1:
- *                         type: string
- *                         example: "sign"
- *                       cate2:
- *                         type: string
- *                         example: "create"
- *                       request_id:
- *                         type: string
- *                         example: "c3a2e6c0-0b9e-4f6e-b8f1-3bb1d0f7a9af"
- *                       api_name:
- *                         type: string
- *                         example: "/api/sign/create"
- *                       result_code:
- *                         type: string
- *                         example: "200"
- *                       latency_ms:
- *                         type: integer
- *                         example: 42
- *                       created_at:
- *                         type: string
- *                         format: date-time
- *                         example: "2025-11-05T10:30:00.000Z"
+ *                 result:
+ *                   type: string
+ *                   example: "success"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE0000"
+ *                 detail:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ *                       description: 조회된 로그 개수
+ *                       example: 20
+ *                     data:
+ *                       type: array
+ *                       description: 로그 목록
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           idx:
+ *                             type: integer
+ *                             example: 123
+ *                           cate1:
+ *                             type: string
+ *                             example: "sign"
+ *                           cate2:
+ *                             type: string
+ *                             example: "create"
+ *                           request_id:
+ *                             type: string
+ *                             example: "c3a2e6c0-0b9e-4f6e-b8f1-3bb1d0f7a9af"
+ *                           api_name:
+ *                             type: string
+ *                             example: "/api/sign/create"
+ *                           result_code:
+ *                             type: string
+ *                             example: "CODE0000"
+ *                           latency_ms:
+ *                             type: integer
+ *                             example: 42
+ *                           created_at:
+ *                             type: string
+ *                             format: date-time
+ *                             example: "2025-11-05T10:30:00.000Z"
  *       400:
  *         description: 잘못된 요청
  *         content:
@@ -221,10 +244,13 @@ export const createLog = async (req, res, next) => {
  *             schema:
  *               type: object
  *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: false
- *                 error:
+ *                 result:
+ *                   type: string
+ *                   example: "fail"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE1000"
+ *                 message:
  *                   type: string
  *                   example: "limit은 1~100 사이여야 합니다"
  *       500:
@@ -234,12 +260,17 @@ export const createLog = async (req, res, next) => {
  *             schema:
  *               type: object
  *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: false
- *                 error:
+ *                 result:
+ *                   type: string
+ *                   example: "fail"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE9999"
+ *                 message:
  *                   type: string
  *                   example: "Failed to fetch logs"
+ *                 detail:
+ *                   type: object
  */
 export const getLogs = async (req, res, next) => {
     try {
@@ -248,27 +279,33 @@ export const getLogs = async (req, res, next) => {
         // limit 범위 검증
         if (limit < 1 || limit > 100) {
             return res.status(400).json({
-                ok: false,
-                error: "limit은 1~100 사이여야 합니다"
+                result: "fail",
+                code: BAD_REQUEST,
+                message: "limit은 1~100 사이여야 합니다"
             });
         }
 
         const rows = await getRecentLogs(limit);
         return res.status(200).json({
-            ok: true,
-            count: rows.length,
-            data: rows,
+            result: "success",
+            code: SUCCESS,
+            detail: {
+                count: rows.length,
+                data: rows
+            }
         });
     } catch (err) {
         console.error("getLogs Error:", err);
         return res.status(500).json({
-            ok: false,
-            error: "Failed to fetch logs",
-            details: err.message,
+            result: "fail",
+            code: INTERNAL_SERVER_ERROR,
+            message: "Failed to fetch logs",
+            detail: {
+                error: err.message
+            }
         });
     }
 };
-
 /**
  * @swagger
  * /api/log/{id}:
@@ -290,8 +327,8 @@ export const getLogs = async (req, res, next) => {
  *         required: true
  *         schema:
  *           type: integer
- *           example: 123
  *         description: 조회할 로그의 idx
+ *         example: 123
  *     responses:
  *       200:
  *         description: 로그 조회 성공
@@ -300,10 +337,13 @@ export const getLogs = async (req, res, next) => {
  *             schema:
  *               type: object
  *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: true
- *                 data:
+ *                 result:
+ *                   type: string
+ *                   example: "success"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE0000"
+ *                 detail:
  *                   type: object
  *                   properties:
  *                     idx:
@@ -335,7 +375,7 @@ export const getLogs = async (req, res, next) => {
  *                       example: "/api/sign/create"
  *                     result_code:
  *                       type: string
- *                       example: "200"
+ *                       example: "CODE0000"
  *                     latency_ms:
  *                       type: integer
  *                       example: 42
@@ -350,10 +390,13 @@ export const getLogs = async (req, res, next) => {
  *             schema:
  *               type: object
  *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: false
- *                 error:
+ *                 result:
+ *                   type: string
+ *                   example: "fail"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE1004"
+ *                 message:
  *                   type: string
  *                   example: "로그를 찾을 수 없습니다"
  *       400:
@@ -363,10 +406,13 @@ export const getLogs = async (req, res, next) => {
  *             schema:
  *               type: object
  *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: false
- *                 error:
+ *                 result:
+ *                   type: string
+ *                   example: "fail"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE1000"
+ *                 message:
  *                   type: string
  *                   example: "유효하지 않은 로그 ID입니다"
  *       500:
@@ -376,12 +422,17 @@ export const getLogs = async (req, res, next) => {
  *             schema:
  *               type: object
  *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: false
- *                 error:
+ *                 result:
+ *                   type: string
+ *                   example: "fail"
+ *                 code:
+ *                   type: string
+ *                   example: "CODE9999"
+ *                 message:
  *                   type: string
  *                   example: "로그 조회 중 오류가 발생했습니다"
+ *                 detail:
+ *                   type: object
  */
 export const getLog = async (req, res, next) => {
     try {
@@ -390,8 +441,9 @@ export const getLog = async (req, res, next) => {
         // id 검증
         if (!id || isNaN(id)) {
             return res.status(400).json({
-                ok: false,
-                error: '유효하지 않은 로그 ID입니다'
+                result: "fail",
+                code: BAD_REQUEST,
+                message: '유효하지 않은 로그 ID입니다'
             });
         }
 
@@ -399,22 +451,27 @@ export const getLog = async (req, res, next) => {
 
         if (!log) {
             return res.status(404).json({
-                ok: false,
-                error: '로그를 찾을 수 없습니다'
+                result: "fail",
+                code: NOT_FOUND,
+                message: '로그를 찾을 수 없습니다'
             });
         }
 
         return res.status(200).json({
-            ok: true,
-            data: log
+            result: "success",
+            code: SUCCESS,
+            detail: log
         });
 
     } catch (err) {
         // logger.error("getLog Error:", err);
         return res.status(500).json({
-            ok: false,
-            error: "로그 조회 중 오류가 발생했습니다",
-            details: err.message,
+            result: "fail",
+            code: INTERNAL_SERVER_ERROR,
+            message: "로그 조회 중 오류가 발생했습니다",
+            detail: {
+                error: err.message
+            }
         });
     }
 };

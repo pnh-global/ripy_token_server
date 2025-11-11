@@ -24,6 +24,12 @@ import {
     getCompanySendStatus
 } from '../services/companySend.service.js';
 import { insertLog } from '../models/log.model.js';
+import {
+    SUCCESS,
+    BAD_REQUEST,
+    NOT_FOUND,
+    INTERNAL_SERVER_ERROR
+} from '../utils/resultCodes.js';
 
 /**
  * ============================================
@@ -120,7 +126,7 @@ function validateRecipients(recipients) {
     return { valid: true, error: null };
 }
 
-/**
+/*
  * @swagger
  * /api/companysend:
  *   post:
@@ -355,7 +361,7 @@ export async function postCompanySend(req, res, next) {
             req_status: 'Y',
             api_name: 'POST /api/companysend',
             api_parameter: null, // 민감 정보 제외
-            result_code: '200',
+            result_code: SUCCESS,
             latency_ms: latency,
             error_code: null,
             error_message: null,
@@ -365,7 +371,7 @@ export async function postCompanySend(req, res, next) {
         // 7. 성공 응답
         res.status(200).json({
             result: 'success',
-            code: '200',
+            code: SUCCESS,
             detail: {
                 request_id,
                 total_count: recipients.length,
@@ -389,7 +395,7 @@ export async function postCompanySend(req, res, next) {
             req_status: 'Y',
             api_name: 'POST /api/companysend',
             api_parameter: null,
-            result_code: '500',
+            result_code: INTERNAL_SERVER_ERROR,
             latency_ms: latency,
             error_code: 'REQUEST_FAILED',
             error_message: error.message,
@@ -399,7 +405,7 @@ export async function postCompanySend(req, res, next) {
         // 에러 응답
         res.status(500).json({
             result: 'fail',
-            code: '500',
+            code: INTERNAL_SERVER_ERROR,
             detail: {
                 error: error.message
             }
@@ -407,7 +413,7 @@ export async function postCompanySend(req, res, next) {
     }
 }
 
-/**
+/*
  * @swagger
  * /api/companysend/{request_id}:
  *   get:
@@ -434,10 +440,9 @@ export async function postCompanySend(req, res, next) {
  *       - ERROR: 전송 중 오류 발생
  *
  *       **사용 예시:**
- *       ```bash
+ *       bash
  *       curl -X GET "http://localhost/api/companysend/caf3a0e7-fd36-4555-95dd-6930cc3727c2" \
  *         -H "X-API-Key: 04e7e900f3aa08cbab319626ca10e12f5ffdec580de61c2efbd934ca98428209"
-*         ```
  *
  *     tags:
  *       - Company Send
@@ -599,7 +604,7 @@ export async function getCompanySend(req, res, next) {
             req_status: 'Y',
             api_name: 'GET /api/companysend/:request_id',
             api_parameter: null,
-            result_code: '200',
+            result_code: SUCCESS,
             latency_ms: latency,
             error_code: null,
             error_message: null,
@@ -609,7 +614,7 @@ export async function getCompanySend(req, res, next) {
         // 4. 성공 응답
         res.status(200).json({
             result: 'success',
-            code: '200',
+            code: SUCCESS,
             detail: status
         });
 
@@ -628,7 +633,7 @@ export async function getCompanySend(req, res, next) {
             req_status: 'Y',
             api_name: 'GET /api/companysend/:request_id',
             api_parameter: null,
-            result_code: '404',
+            result_code: NOT_FOUND,
             latency_ms: latency,
             error_code: 'NOT_FOUND',
             error_message: error.message,
@@ -638,7 +643,7 @@ export async function getCompanySend(req, res, next) {
         // 에러 응답
         res.status(404).json({
             result: 'fail',
-            code: '404',
+            code: NOT_FOUND,
             detail: {
                 error: error.message
             }
