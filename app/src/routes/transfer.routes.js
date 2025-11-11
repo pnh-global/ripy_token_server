@@ -17,7 +17,7 @@ const router = Router();
 /**
  * @swagger
  * tags:
- *   name: Transfer (Web)
+ *   name: Transfer
  *   description: 웹 서버 전용 토큰 전송 API
  */
 
@@ -26,7 +26,7 @@ const router = Router();
  * /api/transfer/create:
  *   post:
  *     tags:
- *       - Transfer (Web)
+ *       - Transfer
  *     summary: 부분 서명 트랜잭션 생성 (1단계)
  *     description: |
  *       웹서버가 토큰 전송을 시작하는 API입니다.
@@ -135,7 +135,7 @@ router.post('/create', asyncHandler(createTransferSign));
  * /api/transfer/finalize:
  *   post:
  *     tags:
- *       - Transfer (Web)
+ *       - Transfer
  *     summary: 최종 서명 완료 및 전송 (2단계)
  *     description: |
  *       앱에서 사용자 서명이 완료된 트랜잭션을 받아 Solana 네트워크로 전송합니다.
@@ -241,7 +241,7 @@ router.post('/finalize', asyncHandler(finalizeTransferSign));
  * /api/transfer/status/{contract_id}:
  *   get:
  *     tags:
- *       - Transfer (Web)
+ *       - Transfer
  *     summary: 전송 상태 조회
  *     description: 계약 ID로 전송 상태를 조회합니다.
  *     parameters:

@@ -95,7 +95,7 @@ function validateInput(data) {
  *       - 요청 데이터는 service key로 암호화되어 전송
  *       - 중복 서명 방지 (signed_or_not2 확인)
  *     tags:
- *       - Sign (서명)
+ *       - Sign (서명) (수정중)
  *     security:
  *       - ApiKeyAuth: []
  *     requestBody:

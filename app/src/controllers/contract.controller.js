@@ -28,7 +28,7 @@ import logger from '../utils/logger.js';
  *       - 계약 체결 후 계약서 정보를 다시 확인할 때
  *       - 서명 상태 확인 (signed_or_not1, signed_or_not2)
  *     tags:
- *       - Contract (계약서)
+ *       - Contract (계약서) (수정중)
  *     security:
  *       - ApiKeyAuth: []
  *     parameters:
@@ -203,7 +203,7 @@ export async function getContract(req, res) {
  *       - 특정 사용자의 계약서 목록을 조회할 때
  *       - 카테고리별로 계약서를 분류하여 조회할 때
  *     tags:
- *       - Contract (계약서)
+ *       - Contract (계약서) (수정중)
  *     security:
  *       - ApiKeyAuth: []
  *     parameters:

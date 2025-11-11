@@ -176,7 +176,7 @@ RIPY 토큰 서버 API 문서입니다.
                 description: '서버 상태 체크'
             },
             {
-                name: 'Transfer (Web)',
+                name: 'Transfer',
                 description: '웹 서버 전용 토큰 전송 API (API Key 불필요)'
             },
             {
@@ -184,24 +184,24 @@ RIPY 토큰 서버 API 문서입니다.
                 description: '회사 지갑 다중 전송 API (API Key 필요)'
             },
             {
-                name: 'Sign (서명)',
+                name: 'Log',
+                description: 'API 호출 로그 조회'
+            },
+            {
+                name: 'Sign (서명) (수정중)',
                 description: '부분 서명 트랜잭션 생성 및 최종 서명 처리 (API Key 필요)'
             },
             {
-                name: 'Contract (계약서)',
+                name: 'Contract (계약서) (수정중)',
                 description: '계약서 조회 및 관리'
             },
             {
-                name: 'Solana (전송)',
+                name: 'Solana (전송) (수정중)',
                 description: 'Solana 토큰 전송 및 트랜잭션 조회'
             },
             {
-                name: 'Key (서비스 키)',
+                name: 'Key (서비스 키) (수정중)',
                 description: '서비스 키 발급, 검증, 회수'
-            },
-            {
-                name: 'Log',
-                description: 'API 호출 로그 조회'
             }
         ]
     },

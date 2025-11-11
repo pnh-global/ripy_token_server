@@ -36,7 +36,7 @@ import {
  *       - 에어드랍 배포
  *       - 급여/수당 지급
  *     tags:
- *       - Solana (전송)
+ *       - Solana (전송) (수정중)
  *     security:
  *       - ApiKeyAuth: []
  *     requestBody:
@@ -161,7 +161,7 @@ export const postCompanySend = async (req, res) => {
  *       - 실패한 전송 확인
  *       - 전송 완료 여부 확인
  *     tags:
- *       - Solana (전송)
+ *       - Solana (전송) (수정중)
  *     security:
  *       - ApiKeyAuth: []
  *     parameters:

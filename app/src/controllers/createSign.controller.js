@@ -146,7 +146,7 @@ function validateEnvironment() {
  *       - 회사 지갑 주소는 응답에 포함되지 않음
  *       - IP 기반 접근 제어 가능
  *     tags:
- *       - Sign (서명)
+ *       - Sign (서명) (수정중)
  *     security:
  *       - ApiKeyAuth: []
  *     requestBody:

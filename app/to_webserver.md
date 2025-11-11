@@ -4,7 +4,7 @@
 http://49.50.130.174:4000/api-docs
 
 ## 테스트 범위
-Transfer (Web) 섹션만 테스트 부탁드립니다:
+Transfer 섹션만 테스트 부탁드립니다:
 1. POST /api/transfer/create
 2. POST /api/transfer/finalize  
 3. GET /api/transfer/status/:contract_id
