@@ -415,6 +415,11 @@ export async function postCompanySend(req, res, next) {
  *     description: |
  *       회사 지갑 다중 전송의 진행 상태를 조회합니다.
  *
+ *       **API Key 인증 필수**
+ *       - 이 API는 x-api-key 헤더 인증이 필요합니다
+ *       - 스웨거 UI 우측 상단 🔓 Authorize 버튼을 먼저 클릭하세요
+ *       - 테스트용 API Key: `04e7e900f3aa08cbab319626ca10e12f5ffdec580de61c2efbd934ca98428209`
+ *
  *       **조회 가능 정보:**
  *       - 전체 상태 (PENDING, PROCESSING, DONE, ERROR)
  *       - 총 수신자 수
@@ -427,6 +432,13 @@ export async function postCompanySend(req, res, next) {
  *       - PROCESSING: 전송 진행 중
  *       - DONE: 전송 완료
  *       - ERROR: 전송 중 오류 발생
+ *
+ *       **사용 예시:**
+ *       ```bash
+ *       curl -X GET "http://localhost/api/companysend/caf3a0e7-fd36-4555-95dd-6930cc3727c2" \
+ *         -H "X-API-Key: 04e7e900f3aa08cbab319626ca10e12f5ffdec580de61c2efbd934ca98428209"
+*         ```
+ *
  *     tags:
  *       - Company Send
  *     security:

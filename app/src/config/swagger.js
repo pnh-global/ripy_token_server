@@ -19,6 +19,19 @@ export const swaggerOptions = {
             description: `
 RIPY 토큰 서버 API 문서입니다.
 
+**API Key 인증 방법:**
+1. 우측 상단의 🔓 Authorize 버튼 클릭
+2. Value 입력란에 Service Key 입력
+3. Authorize 버튼 클릭
+4. 모든 API 호출 시 자동으로 x-api-key 헤더에 포함됨
+
+**현재 테스트용 API Key:**
+04e7e900f3aa08cbab319626ca10e12f5ffdec580de61c2efbd934ca98428209
+
+**주의사항:**
+- 운영 환경에서는 반드시 보안이 유지된 Service Key를 사용하세요
+- Service Key는 r_service_keys 테이블에서 관리됩니다
+
 **Result Code 체계:**
 - FFRR 형식 (FF: 기능 코드, RR: 원인 코드)
 - 0000: 성공
@@ -165,6 +178,10 @@ RIPY 토큰 서버 API 문서입니다.
             {
                 name: 'Transfer (Web)',
                 description: '웹 서버 전용 토큰 전송 API (API Key 불필요)'
+            },
+            {
+                name: 'Company Send',
+                description: '회사 지갑 다중 전송 API (API Key 필요)'
             },
             {
                 name: 'Sign (서명)',
