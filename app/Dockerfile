@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# PM2를 전역으로 설치
+RUN npm install -g pm2
+
 # 작업 디렉토리 설정
 WORKDIR /app
 
@@ -17,4 +20,5 @@ ENV PORT=4000
 EXPOSE 4000 4001
 
 # 애플리케이션 시작
-CMD ["node", "server.js"]
+CMD ["pm2-runtime", "start", "server.js", "--name", "ripy-app"]
+# CMD ["node", "server.js"]
