@@ -1,14 +1,20 @@
+version: '3.8'
+
 services:
-  app:
-    container_name: ripy-app
-    build: ./app
-    # network_mode: "host"  # ❌ 이 줄 삭제 또는 주석 처리
-    ports:
-      - "4000:4000"  # ✅ 추가
+  # ========================================
+  # V1 서버 - 설명회/데모용 (포트 4000)
+  # ========================================
+  app_v1:
+    container_name: ripy-app-v1
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    expose:
+      - "4000"
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - DB_HOST=127.0.0.1  # ⚠️ 이것도 수정 필요 (아래 참조)
+      - DB_HOST=172.19.0.1
       - DB_PORT=3306
       - DB_USER=ripy_user
       - DB_PASSWORD=monivon0070
@@ -19,48 +25,96 @@ services:
       - COMPANY_WALLET_SECRET_KEY=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]
       - USE_SOLANA_MOCK=true
       - COMPANY_WALLET_ADDRESS=DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy
-    networks:  # ✅ 추가
+    networks:
       - ripy-network
+    restart: unless-stopped
+    volumes:
+      - ./logs/v1:/usr/src/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "project=ripy-token-server"
+      - "version=v1"
+      - "purpose=presentation"
+      - "network=devnet"
 
-  app_dev:
-    container_name: ripy-app-dev
-    build: ./app
-    # network_mode: "host"  # ❌ 이 줄 삭제 또는 주석 처리
+  # ========================================
+  # V2 서버 - 운영 개발용 (포트 4001)
+  # ========================================
+  app_v2:
+    container_name: ripy-app-v2
+    build:
+      context: ./app_v2
+      dockerfile: Dockerfile
     ports:
-      - "4001:4001"  # ✅ 추가
+      - "4001:4001"
     environment:
       - NODE_ENV=development
       - PORT=4001
-      - DB_HOST=127.0.0.1  # ⚠️ 이것도 수정 필요
+      - DB_HOST=172.19.0.1
       - DB_PORT=3306
       - DB_USER=ripy_user
       - DB_PASSWORD=monivon0070
-      - DB_NAME=ripy_token
+      - DB_NAME=ripy_token_v2
       - ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       - SOLANA_RPC_ENDPOINT=https://api.devnet.solana.com
       - RIPY_TOKEN_MINT=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
       - COMPANY_WALLET_SECRET_KEY=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]
       - USE_SOLANA_MOCK=true
       - COMPANY_WALLET_ADDRESS=DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy
-    command: ["node","server.js"]
-    networks:  # ✅ 추가
+    command: ["node", "server.js"]
+    networks:
       - ripy-network
+    restart: unless-stopped
+    volumes:
+      - ./logs/v2:/usr/src/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "project=ripy-token-server"
+      - "version=v2"
+      - "purpose=production-dev"
+      - "network=localnet"
 
+  # ========================================
+  # Nginx 리버스 프록시
+  # ========================================
   nginx:
     image: nginx:1.25
     container_name: ripy-nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
-      - /var/log/nginx:/var/log/nginx
+      - ./logs/nginx:/var/log/nginx
     depends_on:
-      - app
-      - app_dev
-    networks:  # ✅ 추가
+      - app_v1
+      - app_v2
+    networks:
       - ripy-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "project=ripy-token-server"
+      - "component=reverse-proxy"
 
-networks:  # ✅ 추가
+# ========================================
+# 네트워크 설정
+# ========================================
+networks:
   ripy-network:
     driver: bridge

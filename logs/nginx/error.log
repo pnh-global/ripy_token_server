@@ -2,3 +2,43 @@
 2025/10/23 03:03:19 [error] 20#20: *132 connect() failed (111: Connection refused) while connecting to upstream, client: 118.38.149.132, server: , request: "GET /favicon.ico HTTP/1.1", upstream: "http://172.18.0.3:4000/favicon.ico", host: "49.50.130.174", referrer: "http://49.50.130.174/docs"
 2025/10/23 03:04:00 [error] 20#20: *132 connect() failed (113: No route to host) while connecting to upstream, client: 118.38.149.132, server: , request: "GET /docs HTTP/1.1", upstream: "http://172.18.0.3:4000/docs", host: "49.50.130.174"
 2025/10/23 03:04:03 [error] 20#20: *132 connect() failed (113: No route to host) while connecting to upstream, client: 118.38.149.132, server: , request: "GET /favicon.ico HTTP/1.1", upstream: "http://172.18.0.3:4000/favicon.ico", host: "49.50.130.174", referrer: "http://49.50.130.174/docs"
+2025/11/19 08:22:27 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:22:27 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:22:27 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:22:27 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:22:28 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:22:28 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:22:28 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:22:28 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:22:29 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:22:29 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:22:31 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:22:31 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:22:34 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:22:34 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:22:41 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:22:41 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:22:54 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:22:54 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:23:20 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:23:20 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:23:25 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:23:25 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:23:25 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:23:25 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:23:26 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:23:26 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:23:26 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:23:26 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:23:27 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:23:27 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:23:29 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:23:29 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:23:32 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:23:32 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:23:39 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:23:39 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:23:52 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:23:52 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
+2025/11/19 08:24:18 [warn] 1#1: duplicate MIME type "text/html" in /etc/nginx/nginx.conf:15
+2025/11/19 08:24:18 [emerg] 1#1: host not found in upstream "app_prod" in /etc/nginx/nginx.conf:56
